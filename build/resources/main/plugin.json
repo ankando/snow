@@ -1,0 +1,8 @@
+{
+  "name": "Snow",
+  "author": "ity",
+  "main": "plugin.SimplePlugin",
+  "description": "More commands and features.",
+  "version": "1.0",
+  "minGameVersion": 149
+}
