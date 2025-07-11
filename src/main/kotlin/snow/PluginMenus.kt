@@ -727,6 +727,10 @@ object PluginMenus {
                 if (acc.isLock) i18nTrue else i18nFalse
             }${PluginVars.RESET}"
         ) {
+            if (acc.password.isEmpty()) {
+                Call.announce(player.con, I18nManager.get("needPass", player))
+                return@MenuEntry
+            }
             DataManager.updatePlayer(acc.id) { it.isLock = !acc.isLock }
             Call.announce(
                 player.con,
