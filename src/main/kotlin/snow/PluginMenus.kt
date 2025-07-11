@@ -255,7 +255,7 @@ object PluginMenus {
                     .map { cmd ->
                         val descKey = "helpCmd.${cmd.text}"
                         val desc = I18nManager.get(descKey, p)
-                        MenuEntry("${PluginVars.GRAY}$desc${PluginVars.RESET}"
+                        MenuEntry("${PluginVars.WHITE}$desc${PluginVars.RESET}"
                         ) { player ->
                             NetClient.sendChatMessage(player, "/${cmd.text}")
                         }
@@ -718,7 +718,7 @@ object PluginMenus {
             }(player)
         }
 
-        val btnLang = MenuEntry("${strong}${I18nManager.get("profile.language", player)}${PluginVars.RESET}") {
+        val btnLang = MenuEntry("${strong}${I18nManager.get("profile.language", player)}: ${weak}${DataManager.getPlayerDataByUuid(player.uuid())?.lang}${PluginVars.RESET}") {
             showLanguageMenu(player)
         }
 
