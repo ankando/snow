@@ -15,6 +15,7 @@ import mindustry.type.UnitType
 import mindustry.ui.Menus
 import mindustry.world.Block
 import plugin.core.*
+import plugin.core.MenusManage.createConfirmMenu
 import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PermissionManager.verifyPermissionLevel
 import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
@@ -289,7 +290,7 @@ object PluginMenus {
                 buildString {
                     if (myScore > 0) {
                         append(
-                            "\n\n${PluginVars.GRAY}${
+                            "\n${PluginVars.GRAY}${
                                 I18nManager.get(
                                     "rank.your_rank",
                                     player
@@ -297,7 +298,7 @@ object PluginMenus {
                             } ${PluginVars.INFO}$myRank/${ranked.size} | $myScore${PluginVars.RESET}\n\n"
                         )
                     } else {
-                        append("${PluginVars.INFO}${I18nManager.get("rank.nopoints", player)}${PluginVars.RESET}\n\n")
+                        append("\n${PluginVars.INFO}${I18nManager.get("rank.nopoints", player)}${PluginVars.RESET}\n\n")
                     }
                     for (i in start until end) {
                         val acc = ranked[i]
@@ -331,8 +332,7 @@ object PluginMenus {
 
     fun showPlayerInfoMenu(viewer: Player, target: Player) {
         val acc = DataManager.getPlayerDataByUuid(target.uuid()) ?: return
-        val isGameAdmin = PermissionManager.isGameAdmin(viewer)
-        val canSet = isGameAdmin
+        val canSet = !isCoreAdmin(target.uuid()) && target != viewer
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
         val exclude = mutableListOf<Player>()
@@ -382,9 +382,15 @@ object PluginMenus {
         }
 
         val btnVoteKick = MenuEntry(
-            "${PluginVars.WHITE}${I18nManager.get("playerInfo.votekick", viewer)}${PluginVars.RESET}"
+            "${if (canSet) strong else weak}${I18nManager.get("playerInfo.votekick", viewer)}${PluginVars.RESET}"
         ) {
-            if (viewer == target || isCoreAdmin(target.uuid())) return@MenuEntry
+            if (!canSet) {
+                Call.announce(
+                    viewer.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", viewer)}${PluginVars.RESET}"
+                )
+                return@MenuEntry
+            }
             VoteManager.createVote(
                 team = false,
                 p = viewer,
@@ -407,7 +413,6 @@ object PluginMenus {
         val btnBan = MenuEntry(
             "${if (canSet) strong else weak}${I18nManager.get("playerInfo.setban", viewer)}${PluginVars.RESET}"
         ) {
-            if (viewer == target || isCoreAdmin(target.uuid())) return@MenuEntry
             if (!canSet) {
                 Call.announce(
                     viewer.con,
@@ -512,7 +517,7 @@ object PluginMenus {
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
         val isGameAdmin = PermissionManager.isGameAdmin(player)
         val normalCount = Groups.player.count { PermissionManager.isNormal(it.uuid()) }
-        var isOk = isGameAdmin || normalCount < 2
+        val isOk = isGameAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
 
@@ -536,6 +541,7 @@ object PluginMenus {
                     "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}"
                 )
             } else {
+                showConfirmMenu(player) {
                 VoteManager.createVote(
                     team = false,
                     p = player,
@@ -553,6 +559,7 @@ object PluginMenus {
                         }
                     }
                 }
+                }
             }
         }
 
@@ -565,11 +572,13 @@ object PluginMenus {
             }${PluginVars.RESET}"
         ) {
             if (isOk) {
-                reloadWorld(map)
-                Call.announce(
-                    player.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("mapInfo.changed", player)}${PluginVars.RESET}"
-                )
+                showConfirmMenu(player) {
+                    reloadWorld(map)
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${I18nManager.get("mapInfo.changed", player)}${PluginVars.RESET}"
+                    )
+                }
             } else {
                 Call.announce(
                     player.con,
@@ -587,11 +596,13 @@ object PluginMenus {
             }${PluginVars.RESET}"
         ) {
             if (isOk) {
-                Vars.maps.setNextMapOverride(map)
-                Call.announce(
-                    player.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("mapInfo.nextset", player)}${PluginVars.RESET}"
-                )
+                showConfirmMenu(player) {
+                    Vars.maps.setNextMapOverride(map)
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${I18nManager.get("mapInfo.nextset", player)}${PluginVars.RESET}"
+                    )
+                }
             } else {
                 Call.announce(
                     player.con,
@@ -1136,7 +1147,9 @@ object PluginMenus {
         }
         val rows = kickablePlayers.map { target ->
             MenuEntry("${PluginVars.WHITE}${target.name()}${PluginVars.RESET}") {
-                beginVotekick(player, target)
+                showConfirmMenu(player) {
+                    beginVotekick(player, target)
+                }
             }
         }
         MenusManage.createMenu<Unit>(
@@ -1173,6 +1186,18 @@ object PluginMenus {
                 restorePlayerEditsWithinSeconds(target.uuid(), 200)
             }
         }
+    }
+    fun showConfirmMenu(player: Player, onConfirm: (Player) -> Unit) {
+        val title = I18nManager.get("confirm.title", player)
+        val desc = "\n${I18nManager.get("confirm.desc", player)}\n"
+
+        createConfirmMenu(
+            title = title,
+            desc = desc,
+            onResult = { p, choice ->
+                if (choice == 0) onConfirm(p)
+            }
+        )(player)
     }
 
 }

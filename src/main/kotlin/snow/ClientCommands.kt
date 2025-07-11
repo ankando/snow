@@ -13,6 +13,7 @@ import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PermissionManager.verifyPermissionLevel
 import plugin.core.Translator.translate
 import plugin.snow.PluginMenus.beginVotekick
+import plugin.snow.PluginMenus.showConfirmMenu
 import plugin.snow.PluginMenus.showVoteKickPlayerMenu
 
 object ClientCommands {
@@ -176,22 +177,24 @@ object ClientCommands {
                 Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("logout.inPvP", player)}${PluginVars.RESET}")
                 return@register
             }
-            if (args.isNotEmpty() && args[0].equals("all", ignoreCase = true)) {
-                acc.uuids.clear()
-                player.clearUnit()
-                DataManager.requestSave()
-                Call.announce(
-                    player.con,
-                    "${PluginVars.INFO}${I18nManager.get("logout.all", player)}${PluginVars.RESET}"
-                )
-            } else {
-                acc.uuids.remove(uuid)
-                player.clearUnit()
-                DataManager.requestSave()
-                Call.announce(
-                    player.con,
-                    "${PluginVars.INFO}${I18nManager.get("logout.success", player)}${PluginVars.RESET}"
-                )
+            showConfirmMenu(player) {
+                if (args.isNotEmpty() && args[0].equals("all", ignoreCase = true)) {
+                    acc.uuids.clear()
+                    player.clearUnit()
+                    DataManager.requestSave()
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.INFO}${I18nManager.get("logout.all", player)}${PluginVars.RESET}"
+                    )
+                } else {
+                    acc.uuids.remove(uuid)
+                    player.clearUnit()
+                    DataManager.requestSave()
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.INFO}${I18nManager.get("logout.success", player)}${PluginVars.RESET}"
+                    )
+                }
             }
         }
         register("surrender", "", "helpCmd.surrender", PermissionLevel.MEMBER) { _, player ->
@@ -204,33 +207,35 @@ object ClientCommands {
                 )
                 return@register
             }
-            VoteManager.createVote(
-                team = true,
-                p = player,
-                title = "${PluginVars.WARN}${I18nManager.get("surrender.vote.title", player)}${PluginVars.RESET}",
-                desc = "${PluginVars.GRAY}${I18nManager.get("surrender.vote.desc", player)}${PluginVars.RESET}",
-            ) { ok ->
-                if (ok) {
-                    team.cores().forEach { core ->
-                        mindustry.entities.Damage.damage(
-                            Team.derelict, core.x, core.y,
-                            1.2f, 9999999f, false, false
-                        )
-                    }
-                    Groups.build.each { if (it.team == team) it.kill() }
-                    Groups.player.each { p ->
-                        if (p.team() == team) {
-                            Call.announce(
-                                p.con,
-                                "${PluginVars.INFO}${I18nManager.get("surrender.success", p)}${PluginVars.RESET}"
+            showConfirmMenu(player) {
+                VoteManager.createVote(
+                    team = true,
+                    p = player,
+                    title = "${PluginVars.WARN}${I18nManager.get("surrender.vote.title", player)}${PluginVars.RESET}",
+                    desc = "${PluginVars.GRAY}${I18nManager.get("surrender.vote.desc", player)}${PluginVars.RESET}",
+                ) { ok ->
+                    if (ok) {
+                        team.cores().forEach { core ->
+                            mindustry.entities.Damage.damage(
+                                Team.derelict, core.x, core.y,
+                                1.2f, 9999999f, false, false
                             )
                         }
+                        Groups.build.each { if (it.team == team) it.kill() }
+                        Groups.player.each { p ->
+                            if (p.team() == team) {
+                                Call.announce(
+                                    p.con,
+                                    "${PluginVars.INFO}${I18nManager.get("surrender.success", p)}${PluginVars.RESET}"
+                                )
+                            }
+                        }
+                    } else {
+                        Call.announce(
+                            player.con,
+                            "${PluginVars.WARN}${I18nManager.get("surrender.fail", player)}${PluginVars.RESET}"
+                        )
                     }
-                } else {
-                    Call.announce(
-                        player.con,
-                        "${PluginVars.WARN}${I18nManager.get("surrender.fail", player)}${PluginVars.RESET}"
-                    )
                 }
             }
         }
