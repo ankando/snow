@@ -67,8 +67,7 @@ object PermissionManager {
         val uuid = player.uuid()
         val level = getLevel(uuid, player)
         if (level.ordinal < required.ordinal) {
-            val key = "permission.level_required.${required.name.lowercase()}"
-            Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get(key, player)}${PluginVars.RESET}")
+            Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
             return
         }
         exec()
