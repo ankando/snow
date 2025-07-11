@@ -252,6 +252,7 @@ object PluginMenus {
                 Vars.netServer.clientCommands.commandList
                     .sortedBy { it.text }
                     .filter { it.text != "help" }
+                    .filter { it.text != "t" }
                     .map { cmd ->
                         val descKey = "helpCmd.${cmd.text}"
                         val desc = I18nManager.get(descKey, p)
