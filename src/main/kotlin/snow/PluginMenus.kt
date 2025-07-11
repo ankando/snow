@@ -1,0 +1,1170 @@
+package plugin.snow
+
+import arc.math.Mathf
+import mindustry.Vars
+import mindustry.content.Blocks
+import mindustry.core.NetClient
+import mindustry.game.Gamemode
+import mindustry.game.Rules
+import mindustry.game.Team
+import mindustry.gen.Call
+import mindustry.gen.Groups
+import mindustry.gen.Player
+import mindustry.net.WorldReloader
+import mindustry.type.UnitType
+import mindustry.ui.Menus
+import mindustry.world.Block
+import plugin.core.*
+import plugin.core.PermissionManager.isCoreAdmin
+import plugin.core.PermissionManager.verifyPermissionLevel
+import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
+import kotlin.math.max
+
+object PluginMenus {
+    private val editableBooleanRules = listOf(
+        "fire",
+        "onlyDepositCore",
+        "polygonCoreProtection",
+        "placeRangeCheck",
+        "schematicsAllowed",
+        "allowEditWorldProcessors",
+        "coreCapture",
+        "reactorExplosions",
+        "possessionAllowed",
+        "unitAmmo",
+        "fog"
+    )
+    private val editableFloatRules = listOf(
+        "buildSpeedMultiplier",
+        "blockHealthMultiplier", "blockDamageMultiplier",
+        "buildCostMultiplier", "deconstructRefundMultiplier",
+        "unitBuildSpeedMultiplier", "unitDamageMultiplier",
+        "unitHealthMultiplier", "unitCostMultiplier",
+        "unitCrashDamageMultiplier", "solarMultiplier"
+    )
+
+    private fun getRuleValue(ruleName: String): Any? {
+        return try {
+            Vars.state.rules.javaClass.getDeclaredField(ruleName).apply {
+                isAccessible = true
+            }.get(Vars.state.rules)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun Rules.setRule(name: String, value: Any) {
+        try {
+            val field = this.javaClass.getDeclaredField(name)
+            field.isAccessible = true
+            field.set(this, value)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun promptRuleValueInput(player: Player, rule: String) {
+        MenusManage.createTextInput(
+            title = "Enter new value for $rule",
+            desc = "",
+            placeholder = "",
+            isNum = false,
+            maxChars = 10
+        ) { p, input ->
+            val newValue = input.toFloatOrNull()
+            if (newValue == null || newValue < 0f) {
+                Call.announce(p.con, "${PluginVars.GRAY}Invalid input. Must be a number >= 0.")
+                return@createTextInput
+            }
+            Vars.state.rules.setRule(rule, newValue)
+            Call.setRules(Vars.state.rules)
+            Call.announce(p.con, "${PluginVars.GRAY}${p.plainName()} set $rule to $newValue")
+            showRulesMenu(p)
+        }(player)
+    }
+
+    private fun sortedBlocks(): List<Block> {
+        val banned = Vars.state.rules.bannedBlocks
+        return Vars.content.blocks().toArray()
+            .filter { it.canBeBuilt() && it != Blocks.air }
+            .sortedWith(compareByDescending<Block> { banned.contains(it) })
+    }
+
+    private fun sortedUnits(): List<UnitType> {
+        val banned = Vars.state.rules.bannedUnits
+        return Vars.content.units().toArray()
+            .filter { !it.internal }
+            .sortedWith(compareByDescending<UnitType> { banned.contains(it) })
+    }
+
+    private val rulesMenuId: Int = Menus.registerMenu { p, choice ->
+        val player = p ?: return@registerMenu
+
+        val allRules = editableBooleanRules + editableFloatRules
+        val blocksIndex = allRules.size
+        val unitsIndex = allRules.size + 1
+        val closeIndex = allRules.size + 2
+
+        when (choice) {
+            closeIndex -> Call.hideFollowUpMenu(player.con, rulesMenuId)
+            blocksIndex -> showBlocksMenu(player)
+            unitsIndex -> showUnitsMenu(player)
+            in 0 until allRules.size -> {
+                verifyPermissionLevel(player, PermissionLevel.GAME_ADMIN) {
+                    val rule = allRules[choice]
+                    if (editableBooleanRules.contains(rule)) {
+                        val cur = getRuleValue(rule) as? Boolean ?: return@verifyPermissionLevel
+                        Vars.state.rules.setRule(rule, !cur)
+                        Call.setRules(Vars.state.rules)
+                        Call.announce(
+                            player.con,
+                            "${PluginVars.INFO}${player.plainName()} toggled $rule to ${!cur}${PluginVars.RESET}"
+                        )
+                        showRulesMenu(player)
+                    } else if (editableFloatRules.contains(rule)) {
+                        promptRuleValueInput(player, rule)
+                    }
+                }
+            }
+        }
+    }
+
+    fun showRulesMenu(player: Player) {
+        verifyPermissionLevel(player, PermissionLevel.NORMAL) {
+            val allRules = editableBooleanRules + editableFloatRules
+            val rows = allRules.chunked(3).map { row ->
+                row.map { rule ->
+                    val value = getRuleValue(rule)
+                    "\n${PluginVars.WHITE}$rule: ${PluginVars.SECONDARY}$value${PluginVars.RESET}\n"
+                }.toTypedArray()
+            }.toMutableList()
+
+            val blocksLabel =
+                "${PluginVars.WHITE}\uE871 ${I18nManager.get("rules.blocks", player)}${PluginVars.RESET}"
+            val unitsLabel =
+                "${PluginVars.WHITE}\uE82A ${I18nManager.get("rules.units", player)}${PluginVars.RESET}"
+            val closeLabel = "${PluginVars.GRAY}\uE815 ${I18nManager.get("close", player)}${PluginVars.RESET}"
+            rows += arrayOf(blocksLabel)
+            rows += arrayOf(unitsLabel)
+            rows += arrayOf(closeLabel)
+            val buttons = rows.toTypedArray()
+            Call.followUpMenu(
+                player.con,
+                rulesMenuId,
+                "${PluginVars.GRAY}${I18nManager.get("rules.title", player)}${PluginVars.RESET}",
+                "",
+                buttons
+            )
+        }
+    }
+
+    private val blockMenuId: Int = Menus.registerMenu { p, choice ->
+        val player = p ?: return@registerMenu
+        val bannedBlocks = Vars.state.rules.bannedBlocks
+        val blocks = sortedBlocks()
+        val closeIndex = blocks.size
+
+        when (choice) {
+            closeIndex -> Call.hideFollowUpMenu(player.con, blockMenuId)
+            in 0 until blocks.size -> {
+                verifyPermissionLevel(player, PermissionLevel.GAME_ADMIN) {
+                    val block = blocks[choice]
+                    if (bannedBlocks.contains(block)) bannedBlocks.remove(block) else bannedBlocks.add(block)
+                    Call.setRules(Vars.state.rules)
+                    showBlocksMenu(player)
+                }
+            }
+        }
+    }
+
+    private val unitMenuId: Int = Menus.registerMenu { p, choice ->
+        val player = p ?: return@registerMenu
+        val units = sortedUnits()
+        val closeIndex = units.size
+
+        when (choice) {
+            closeIndex -> Call.hideFollowUpMenu(player.con, unitMenuId)
+            in 0 until units.size -> {
+                verifyPermissionLevel(player, PermissionLevel.GAME_ADMIN) {
+                    val unit = units[choice]
+                    val bannedUnits = Vars.state.rules.bannedUnits
+                    if (bannedUnits.contains(unit)) bannedUnits.remove(unit) else bannedUnits.add(unit)
+                    Call.setRules(Vars.state.rules)
+                    showUnitsMenu(player)
+                }
+            }
+        }
+    }
+
+    private fun showBlocksMenu(player: Player) {
+        verifyPermissionLevel(player, PermissionLevel.NORMAL) {
+            val banned = Vars.state.rules.bannedBlocks
+            val rows = sortedBlocks()
+                .chunked(4)
+                .map { row ->
+                    row.map { b ->
+                        val col = if (banned.contains(b)) PluginVars.SECONDARY else PluginVars.WHITE
+                        "$col${b.localizedName}${PluginVars.RESET}"
+                    }.toTypedArray()
+                }.toMutableList()
+
+            rows += arrayOf("${PluginVars.GRAY}\uE815 ${I18nManager.get("close", player)}${PluginVars.RESET}")
+            Call.followUpMenu(
+                player.con,
+                blockMenuId,
+                "${PluginVars.GRAY}${I18nManager.get("rules.blocks", player)}${PluginVars.RESET}",
+                "",
+                rows.toTypedArray()
+            )
+        }
+    }
+
+    private fun showUnitsMenu(player: Player) {
+        verifyPermissionLevel(player, PermissionLevel.NORMAL) {
+            val banned = Vars.state.rules.bannedUnits
+            val rows = sortedUnits()
+                .chunked(4)
+                .map { row ->
+                    row.map { u ->
+                        val col = if (banned.contains(u)) PluginVars.SECONDARY else PluginVars.WHITE
+                        "$col${u.localizedName}${PluginVars.RESET}"
+                    }.toTypedArray()
+                }.toMutableList()
+
+            rows += arrayOf("${PluginVars.GRAY}\uE815 ${I18nManager.get("close", player)}${PluginVars.RESET}")
+            Call.followUpMenu(
+                player.con,
+                unitMenuId,
+                "${PluginVars.GRAY}${I18nManager.get("rules.units", player)}${PluginVars.RESET}",
+                "",
+                rows.toTypedArray()
+            )
+        }
+    }
+
+    val showHelpMenu = MenusManage.createMenu<Unit>(
+        title = { _, page, total, _ ->
+            "${PluginVars.GRAY}${
+                I18nManager.get(
+                    "help.title",
+                    null
+                )
+            } $page/$total${PluginVars.RESET}"
+        },
+        desc = { _, _, _ -> "" },
+        options = { _, _, _ ->
+            Vars.netServer.clientCommands.commandList
+                .sortedBy { it.text }
+                .map { cmd ->
+                    MenuEntry(
+                        "${PluginVars.WHITE}/${cmd.text} ${PluginVars.SECONDARY}${cmd.paramText}${PluginVars.RESET}\n" +
+                                "${PluginVars.SECONDARY}${cmd.description}${PluginVars.RESET}"
+                    ) { player ->
+                        NetClient.sendChatMessage(player, "/${cmd.text}")
+                    }
+                }
+        }
+    )
+
+    val showRankMenu = MenusManage.createMenu<Unit>(
+        title = { player, page, total, _ ->
+            "${PluginVars.GRAY}${
+                I18nManager.get(
+                    "rank.title",
+                    null
+                )
+            } $page/$total${PluginVars.RESET}"
+        },
+        perPage = 40,
+        desc = { player, page, _ ->
+            val ranked = DataManager.players.values().filter { it.score > 0 }
+                .sortedByDescending { it.score }
+            val myAcc = ranked.find { it.uuids.any { uuid -> uuid == player.uuid() } }
+            val myScore = myAcc?.score ?: 0
+            val myRank = if (myAcc != null) ranked.indexOfFirst { it.id == myAcc.id } + 1 else 0
+            val start = (page - 1) * 40
+            val end = minOf(start + 40, ranked.size)
+            buildString {
+                if (myScore > 0) {
+                    append(
+                        "\n${PluginVars.GRAY}${
+                            I18nManager.get(
+                                "rank.your_rank",
+                                player
+                            )
+                        } ${PluginVars.INFO}$myRank/${ranked.size} | $myScore${PluginVars.RESET}\n\n"
+                    )
+                } else {
+                    append("${PluginVars.INFO}${I18nManager.get("rank.nopoints", player)}${PluginVars.RESET}\n\n")
+                }
+                for (i in start until end) {
+                    val acc = ranked[i]
+                    val nick = acc.account.ifBlank { I18nManager.get("rank.unknown", player) }
+                    append("${PluginVars.INFO}${i + 1}. $nick: ${acc.score}${PluginVars.RESET}\n")
+                }
+            }
+        },
+        options = { _, _, _ -> emptyList() }
+    )
+
+
+    val showPlayersMenu = MenusManage.createMenu<Unit>(
+        title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("players.title", null)}${PluginVars.RESET}" },
+        desc = { _, _, _ -> "" },
+        paged = false,
+        options = { _, _, _ ->
+            Groups.player
+                .map { player ->
+                    MenuEntry("${PluginVars.WHITE}${player.name()}${PluginVars.RESET}") { viewer ->
+                        showPlayerINFOMenu(viewer, player)
+                    }
+                }
+        }
+    )
+
+
+    fun showPlayerINFOMenu(viewer: Player, target: Player) {
+        val acc = DataManager.getPlayerDataByUuid(target.uuid()) ?: return
+        val isGameAdmin = PermissionManager.isGameAdmin(viewer)
+        val canSet = isGameAdmin
+        val strong = PluginVars.INFO
+        val weak = PluginVars.SECONDARY
+        val exclude = mutableListOf<Player>()
+        exclude.add(target)
+
+        val desc = buildString {
+            append("${PluginVars.WHITE}${acc.account}${PluginVars.RESET}\n")
+            append(
+                "${PluginVars.SECONDARY}${
+                    I18nManager.get(
+                        "playerINFO.score",
+                        viewer
+                    )
+                }: ${acc.score}${PluginVars.RESET}\n"
+            )
+            append(
+                "${PluginVars.SECONDARY}${
+                    I18nManager.get(
+                        "playerINFO.wins",
+                        viewer
+                    )
+                }: ${acc.wins}${PluginVars.RESET}\n"
+            )
+            append(
+                "${PluginVars.SECONDARY}${
+                    I18nManager.get(
+                        "playerINFO.lang",
+                        viewer
+                    )
+                }: ${acc.lang}${PluginVars.RESET}\n"
+            )
+        }
+
+        val btnPm = MenuEntry(
+            "${PluginVars.WHITE}${I18nManager.get("playerINFO.pm", viewer)}${PluginVars.RESET}"
+        ) {
+            MenusManage.createTextInput(
+                title = I18nManager.get("playerINFO.pm.title", viewer),
+                desc = "",
+                isNum = false,
+                placeholder = ""
+            ) { sender, input ->
+                if (input.isBlank()) return@createTextInput
+                target.sendMessage("${PluginVars.INFO}\uE836 ${sender.name()}:${PluginVars.RESET}${PluginVars.GRAY} $input")
+                sender.sendMessage("${PluginVars.INFO}\uE835 ${target.name()}:${PluginVars.RESET}${PluginVars.GRAY} $input")
+            }(viewer)
+        }
+
+        val btnVoteKick = MenuEntry(
+            "${PluginVars.WHITE}${I18nManager.get("playerINFO.votekick", viewer)}${PluginVars.RESET}"
+        ) {
+            if (viewer == target || isCoreAdmin(target.uuid())) return@MenuEntry
+            VoteManager.createVote(
+                team = false,
+                p = viewer,
+                title = "${PluginVars.WARN}${I18nManager.get("playerINFO.votekick.title", viewer)}${PluginVars.RESET}",
+                desc = "${PluginVars.GRAY}${viewer.name}${
+                    I18nManager.get(
+                        "playerINFO.votekick.desc",
+                        viewer
+                    )
+                }: ${target.name()}${PluginVars.RESET}",
+                excludePlayers = exclude
+            ) { ok ->
+                if (ok) {
+                    target.kick("")
+                    restorePlayerEditsWithinSeconds(target, 200)
+                }
+            }
+        }
+
+        val btnBan = MenuEntry(
+            "${if (canSet) strong else weak}${I18nManager.get("playerINFO.setban", viewer)}${PluginVars.RESET}"
+        ) {
+            if (viewer == target || isCoreAdmin(target.uuid())) return@MenuEntry
+            if (!canSet) {
+                Call.announce(
+                    viewer.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", viewer)}${PluginVars.RESET}"
+                )
+                return@MenuEntry
+            }
+            MenusManage.createTextInput(
+                title = I18nManager.get("playerINFO.setban.title", viewer),
+                desc = I18nManager.get("playerINFO.setban.desc", viewer),
+                isNum = false,
+                placeholder = ""
+            ) { _, input ->
+                val seconds = input.toLongOrNull()
+                if (seconds == null || seconds < 0) {
+                    Call.announce(
+                        viewer.con,
+                        "${PluginVars.WARN}${I18nManager.get("playerINFO.setban.invalid", viewer)}${PluginVars.RESET}"
+                    )
+                    return@createTextInput
+                }
+                DataManager.updatePlayer(acc.id) {
+                    it.banUntil = if (seconds == 0L) 0 else System.currentTimeMillis() + seconds * 1000
+                }
+                Call.announce(
+                    viewer.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("playerINFO.setban.SUCCESS", viewer)}${PluginVars.RESET}"
+                )
+            }(viewer)
+        }
+
+        val rows = listOf(btnPm, btnVoteKick, btnBan)
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ ->
+                "${PluginVars.GRAY}${
+                    I18nManager.get(
+                        "playerINFO.title",
+                        viewer
+                    )
+                }${PluginVars.RESET}"
+            },
+            paged = false,
+            desc = { _, _, _ -> desc },
+            options = { _, _, _ -> rows }
+        )(viewer, 1)
+
+    }
+
+    val showMapMenu = MenusManage.createMenu<Unit>(
+        title = { _, page, total, _ ->
+            "${PluginVars.GRAY}${
+                I18nManager.get(
+                    "map.title",
+                    null
+                )
+            } $page/$total${PluginVars.RESET}"
+        },
+        desc = { _, _, _ -> "" },
+        options = { _, _, _ ->
+            Vars.maps.customMaps().toList().mapIndexed { i, map ->
+                MenuEntry(
+                    "${PluginVars.WHITE}\uF029${i + 1} ${map.name()}${PluginVars.RESET}"
+                ) { player ->
+                    showMapOptionMenu(player, map)
+                }
+            }
+        }
+    )
+
+
+    private fun reloadWorld(map: mindustry.maps.Map) {
+        try {
+            val descLower = map.description().lowercase()
+            val tags = TagUtil.getTags(descLower).map { it.lowercase() }
+            val modeMap = mapOf(
+                "pvp" to Gamemode.pvp,
+                "survival" to Gamemode.survival,
+                "sandbox" to Gamemode.sandbox,
+                "attack" to Gamemode.attack
+            )
+            val matched = modeMap.keys.filter { it in tags }
+            val modeKey = if (matched.size == 1) matched.first()
+            else {
+                val last = arc.Core.settings.get("lastServerMode", "sandbox")
+                if (last in modeMap) last else "sandbox"
+            }
+            val gamemode = modeMap[modeKey] ?: Gamemode.sandbox
+
+            val reloader = WorldReloader()
+            reloader.begin()
+            Vars.state.map = map
+            Vars.world.loadMap(map)
+            Vars.state.rules = map.applyRules(gamemode)
+            Vars.logic.play()
+            reloader.end()
+        } catch (e: Exception) {
+            Call.announce(
+                "${PluginVars.ERROR}${
+                    I18nManager.get(
+                        "map.load_failed",
+                        null
+                    )
+                }: ${map.name()}${PluginVars.RESET}"
+            )
+            throw e
+        }
+    }
+
+    fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
+        val isGameAdmin = PermissionManager.isGameAdmin(player)
+        val strong = PluginVars.INFO
+        val weak = PluginVars.SECONDARY
+
+        val normalCount = Groups.player.count { PermissionManager.isNormal(it.uuid()) }
+        val descLower = map.description()
+        val tags = TagUtil.getTags(descLower)
+        val tagLine = tags.joinToString(" ") { "#$it" }
+
+        val pureDesc = map.description().replace(Regex("""\[[^]]*]"""), "").trim()
+
+        val desc = buildString {
+            append("\n${PluginVars.INFO}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
+            append("\n${PluginVars.INFO}${tagLine}${PluginVars.RESET}\n")
+            append("${PluginVars.GRAY}${pureDesc}${PluginVars.RESET}\n")
+        }
+
+        val btnVote = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapINFO.vote", player)}${PluginVars.RESET}") {
+            if (normalCount <= 1) {
+                reloadWorld(map)
+                Call.announce(
+                    player.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}"
+                )
+            } else {
+                VoteManager.createVote(
+                    team = false,
+                    p = player,
+                    title = "${PluginVars.INFO}${I18nManager.get("rtv.title", player)}${PluginVars.RESET}",
+                    desc = "${PluginVars.GRAY}${player.name}${
+                        I18nManager.get(
+                            "rtv.desc",
+                            player
+                        )
+                    } [${map.name()}]${PluginVars.RESET}"
+                ) { ok ->
+                    if (ok) {
+                        if (Vars.state.isGame) {
+                            reloadWorld(map)
+                        }
+                    }
+                }
+            }
+        }
+
+        val btnChange = MenuEntry(
+            "${if (isGameAdmin) strong else weak}${
+                I18nManager.get(
+                    "mapINFO.change",
+                    player
+                )
+            }${PluginVars.RESET}"
+        ) {
+            if (normalCount <= 1 || isGameAdmin) {
+                reloadWorld(map)
+                Call.announce(
+                    player.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("mapINFO.changed", player)}${PluginVars.RESET}"
+                )
+            } else {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}"
+                )
+            }
+        }
+
+        val btnNext = MenuEntry(
+            "${if (isGameAdmin) strong else weak}${
+                I18nManager.get(
+                    "mapINFO.next",
+                    player
+                )
+            }${PluginVars.RESET}"
+        ) {
+            if (normalCount <= 1 || isGameAdmin) {
+                Vars.maps.setNextMapOverride(map)
+                Call.announce(
+                    player.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("mapINFO.nextset", player)}${PluginVars.RESET}"
+                )
+            } else {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}"
+                )
+            }
+        }
+
+        val rows = listOf(btnVote, btnChange, btnNext)
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
+            paged = false,
+            desc = { _, _, _ -> desc },
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+    fun showLanguageMenu(player: Player) {
+        val acc = DataManager.getPlayerDataByUuid(player.uuid()) ?: return
+        val langs = listOf(
+            "zh_CN" to "${PluginVars.WHITE}中文${PluginVars.RESET}",
+            "en" to "${PluginVars.WHITE}English${PluginVars.RESET}",
+            "ru" to "${PluginVars.WHITE}Русский${PluginVars.RESET}",
+            "ja" to "${PluginVars.WHITE}日本語${PluginVars.RESET}"
+        )
+
+        val rows = langs.map { (code, display) ->
+            val selected = if (acc.lang == code) PluginVars.SUCCESS else ""
+            MenuEntry("$selected$display${PluginVars.RESET}") { _ ->
+                if (acc.lang != code) {
+                    DataManager.updatePlayer(acc.id) { it.lang = code }
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${I18nManager.get("lang.changed", player)}${PluginVars.RESET}"
+                    )
+                }
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("lang.title", player)}${PluginVars.RESET}" },
+            paged = false,
+            desc = { _, _, _ -> "${PluginVars.INFO}${I18nManager.get("lang.desc", player)}${PluginVars.RESET}" },
+            options = { _, _, _ -> rows }
+        )(player, 1)
+
+    }
+
+    fun showSetProfileMenu(player: Player) {
+        val acc = DataManager.getPlayerDataByUuid(player.uuid()) ?: return
+        val isCoreAdmin = isCoreAdmin(player.uuid())
+        val canToggleAdmin = isCoreAdmin
+        val strong = PluginVars.WHITE
+        val weak = PluginVars.GRAY
+
+        val btnUsername = MenuEntry("${strong}${I18nManager.get("profile.username", player)}${PluginVars.RESET}") {
+            MenusManage.createTextInput(
+                title = I18nManager.get("profile.username.title", player),
+                desc = I18nManager.get("profile.username.desc", player),
+                isNum = false,
+                placeholder = acc.account
+            ) { _, input ->
+                val trimName = input.trim()
+                if (trimName.isBlank()) {
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.WARN}${I18nManager.get("profile.username.invalid", player)}${PluginVars.RESET}"
+                    )
+                    return@createTextInput
+                }
+                val exists = DataManager.players.values()
+                    .any { it.account.equals(trimName, ignoreCase = true) && it.id != acc.id }
+                if (exists) {
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.WARN}${I18nManager.get("profile.username.duplicate", player)}${PluginVars.RESET}"
+                    )
+                    return@createTextInput
+                }
+                DataManager.updatePlayer(acc.id) { it.account = trimName }
+                Call.announce(
+                    player.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("profile.username.SUCCESS", player)}${PluginVars.RESET}"
+                )
+            }(player)
+        }
+
+        val btnPassword = MenuEntry("${strong}${I18nManager.get("profile.password", player)}${PluginVars.RESET}") {
+            MenusManage.createTextInput(
+                title = I18nManager.get("profile.password.title", player),
+                desc = I18nManager.get("profile.password.desc", player),
+                isNum = true,
+                placeholder = ""
+            ) { _, input ->
+                val trimPwd = input.trim()
+                if (trimPwd.length < 4) {
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.WARN}${I18nManager.get("profile.password.invalid", player)}${PluginVars.RESET}"
+                    )
+                    return@createTextInput
+                }
+                DataManager.updatePlayer(acc.id) { it.password = trimPwd }
+                Call.announce(
+                    player.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("profile.password.SUCCESS", player)}${PluginVars.RESET}"
+                )
+            }(player)
+        }
+
+        val btnLang = MenuEntry("${strong}${I18nManager.get("profile.language", player)}${PluginVars.RESET}") {
+            showLanguageMenu(player)
+        }
+
+        val btnLock = MenuEntry(
+            "${if (acc.isLock) strong else weak}${I18nManager.get("profile.lock", player)}${PluginVars.RESET}"
+        ) {
+            DataManager.updatePlayer(acc.id) { it.isLock = !acc.isLock }
+            Call.announce(
+                player.con,
+                "${PluginVars.SUCCESS}${I18nManager.get("profile.lock.SUCCESS", player)}${PluginVars.RESET}"
+            )
+        }
+        val btnAdmin = MenuEntry(
+            "${if (canToggleAdmin && acc.isAdmin) strong else weak}${
+                I18nManager.get(
+                    "profile.admin",
+                    player
+                )
+            }${PluginVars.RESET}"
+        ) {
+            if (!canToggleAdmin) {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}"
+                )
+                return@MenuEntry
+            }
+            DataManager.updatePlayer(acc.id) { it.isAdmin = !acc.isAdmin }
+            if (player.admin() != acc.isAdmin) player.admin = acc.isAdmin
+            Call.announce(
+                player.con,
+                "${PluginVars.SUCCESS}${I18nManager.get("profile.admin.SUCCESS", player)}${PluginVars.RESET}"
+            )
+        }
+
+        val rows = listOf(btnUsername, btnPassword, btnLang, btnLock, btnAdmin)
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ ->
+                "${PluginVars.GRAY}${
+                    I18nManager.get(
+                        "profile.title",
+                        player
+                    )
+                }${PluginVars.RESET}"
+            },
+            paged = false,
+            desc = { _, _, _ -> "" },
+            options = { _, _, _ -> rows }
+        )(player, 1)
+
+    }
+
+    fun showMapInfoMenu(player: Player, map: mindustry.maps.Map) {
+        val descLower = map.description().lowercase()
+        val tags = TagUtil.getTags(descLower)
+        val tagLine = tags.joinToString(" ") { "#$it" }
+
+        val pureDesc = map.description().replace(Regex("""\[[^]]*]"""), "").trim()
+
+        val desc = buildString {
+            append(
+                "\n${PluginVars.WHITE}${(Vars.state.tick / 60f / 60f).toInt()} ${
+                    I18nManager.get(
+                        "minute",
+                        player
+                    )
+                }${PluginVars.RESET}\n"
+            )
+            append("\n")
+            append("${PluginVars.WHITE}${map.name()}${PluginVars.RESET}\n")
+            if (tags.isNotEmpty()) {
+                append("${PluginVars.INFO}$tagLine${PluginVars.RESET}\n")
+            }
+            append("\n")
+            if (!map.author().isNullOrBlank()) {
+                append("${PluginVars.SECONDARY}${map.author()}${PluginVars.RESET}\n")
+            }
+            append("\n")
+            append("${PluginVars.GRAY}$pureDesc${PluginVars.RESET}\n")
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ ->
+                "${PluginVars.GRAY}${
+                    I18nManager.get(
+                        "mapINFO.title",
+                        player
+                    )
+                }${PluginVars.RESET}"
+            },
+            paged = false,
+            desc = { _, _, _ -> desc },
+            options = { _, _, _ -> listOf() }
+        )(player, 1)
+
+    }
+
+    private val tempTeamChoices = mutableMapOf<String, MutableList<Team>>()
+    fun showTeamMenu(player: Player) {
+        val teamsWithCore = Team.all.filter { t -> t.data().hasCore() && t != Team.derelict }.toMutableList()
+
+        if (teamsWithCore.isEmpty()) {
+            Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("team.no_team", player)}${PluginVars.RESET}")
+            return
+        }
+
+        val all = Groups.player.copy().select { p ->
+            val t = p.team()
+            t != Team.derelict && t.data().hasCore()
+        }
+
+        val totalPlayers = all.size + 1
+        val maxPerTeam = max(1, Mathf.ceil(totalPlayers / teamsWithCore.size.toFloat()))
+        val desc = ""
+
+        val columns = mutableListOf<MutableList<String?>>()
+
+        for (t in teamsWithCore) {
+            val col = mutableListOf<String?>()
+            val count = all.count { p -> p.team() === t }
+
+            col.add("${PluginVars.SECONDARY}${t.coloredName()}${PluginVars.RESET}")
+
+            all.each { p ->
+                if (p.team() === t) {
+                    col.add("${PluginVars.WHITE}${p.name()}${PluginVars.RESET}")
+                }
+            }
+
+            if (count < maxPerTeam) {
+                col.add("${PluginVars.INFO}${I18nManager.get("team.join", player)}${PluginVars.RESET}") // 加号
+            }
+
+            columns.add(col)
+        }
+
+        val maxRows = columns.maxOfOrNull { it.size } ?: 0
+
+        for (col in columns) {
+            while (col.size < maxRows) {
+                col.add("${PluginVars.SECONDARY}\uE868${PluginVars.RESET}")
+            }
+        }
+
+        val rows = mutableListOf<Array<String?>>()
+        rows.add(arrayOf("${PluginVars.SECONDARY}\uE88F${PluginVars.RESET}"))
+        for (rowIndex in 0 until maxRows) {
+            val thisRow = Array(columns.size) { colIndex -> columns[colIndex][rowIndex] }
+            rows.add(thisRow)
+        }
+
+        tempTeamChoices[player.uuid()] = teamsWithCore
+
+        Call.followUpMenu(
+            player.con,
+            teamMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("team.choose", player)}${PluginVars.RESET}",
+            desc,
+            rows.toTypedArray()
+        )
+    }
+
+    private fun onMenuChoose(player: Player, choice: Int) {
+        if (choice < 0) return
+        if (choice == 0) {
+            Call.hideFollowUpMenu(player.con, teamMenuId)
+            return
+        }
+
+        val teams = tempTeamChoices[player.uuid()]?.toList()?.toMutableList()
+        if (teams.isNullOrEmpty()) return
+
+        val totalCols = teams.size
+        val adjustedChoice = choice - 1
+
+        val colIndex = adjustedChoice % totalCols
+        val rowIndex = adjustedChoice / totalCols
+
+        val target = teams[colIndex]
+        if (target === Team.derelict || !target.data().hasCore()) return
+
+        val all = Groups.player.copy().select { p ->
+            p?.team()?.let { it != Team.derelict && it.data().hasCore() } ?: false
+        }
+        val totalPlayers = all.size + 1
+        val maxPerTeam = max(1, Mathf.ceil(totalPlayers / teams.size.toFloat()))
+        val count = all.count { it?.team() === target }
+
+        val col = all.filter { it?.team() === target }.mapNotNull { it?.name }
+        val isPlusButton = (rowIndex == col.size + 1) && (count < maxPerTeam)
+
+        if (!isPlusButton) {
+            showTeamMenu(player)
+            return
+        }
+
+        Call.hideFollowUpMenu(player.con, teamMenuId)
+        player.team(target)
+        PlayerTeamManager.setTeam(player, target)
+        Call.announce(
+            player.con,
+            "${PluginVars.INFO}${I18nManager.get("team.joined", player)} ${target.coloredName()}${PluginVars.RESET}"
+        )
+    }
+
+    private val teamMenuId = Menus.registerMenu { player, choice ->
+        if (player != null) {
+            onMenuChoose(player, choice)
+        }
+    }
+
+    val regNameInput = MenusManage.createTextInput(
+        title = I18nManager.get("reg.title", null),
+        desc = I18nManager.get("reg.desc", null),
+        isNum = false,
+        placeholder = ""
+    ) { player, input ->
+        val name = input.trim()
+        val exists = DataManager.players.values().any { it.account == name }
+        if (exists) {
+            Call.announce(
+                player.con,
+                "${PluginVars.ERROR}${I18nManager.get("reg.name.duplicate", player)}${PluginVars.RESET}"
+            )
+            return@createTextInput
+        }
+        Call.announce(
+            player.con,
+            "${PluginVars.SUCCESS}${I18nManager.get("reg.SUCCESS", player)}$name${PluginVars.RESET}"
+        )
+        DataManager.registerPlayer(
+            account = name,
+            password = "",
+            uuid = player.uuid(),
+            lang = player.locale()
+        )
+        if (Vars.state.rules.pvp) {
+            showTeamMenu(player)
+        }
+    }
+
+    val logNameInput = MenusManage.createTextInput(
+        title = I18nManager.get("login.title", null),
+        desc = I18nManager.get("login.name.desc", null),
+        isNum = false,
+        placeholder = ""
+    ) { player, input ->
+        val name = input.trim()
+        val account = DataManager.players.values().find { it.account == name }
+        if (account == null) {
+            Call.announce(
+                player.con,
+                "${PluginVars.ERROR}${I18nManager.get("login.notfound", player)}${PluginVars.RESET}"
+            )
+            return@createTextInput
+        }
+        logPasswordInput(player, account)
+    }
+
+    fun logPasswordInput(player: Player, account: PlayerData) {
+        MenusManage.createTextInput(
+            title = I18nManager.get("login.password.title", null),
+            desc = I18nManager.get("login.password.desc", null),
+            isNum = true,
+            placeholder = ""
+        ) { p, pwd ->
+            if (account.isLock) {
+                Call.announce(p.con, "${PluginVars.ERROR}${I18nManager.get("isLock", p)}${PluginVars.RESET}")
+                return@createTextInput
+            }
+            if (account.uuids.any { it == p.uuid() }) {
+                Call.announce(p.con, "${PluginVars.ERROR}${I18nManager.get("login.already", p)}${PluginVars.RESET}")
+                return@createTextInput
+            }
+            if (account.password != pwd) {
+                Call.announce(p.con, "${PluginVars.ERROR}${I18nManager.get("login.pwdERROR", p)}${PluginVars.RESET}")
+                return@createTextInput
+            }
+            account.uuids.add(p.uuid())
+            DataManager.requestSave()
+            Call.announce(p.con, "${PluginVars.SUCCESS}${I18nManager.get("login.SUCCESS", p)}${PluginVars.RESET}")
+        }(player)
+    }
+
+    fun showAuthMenu(player: Player) {
+        val title = "${PluginVars.GRAY}${I18nManager.get("auth.title", player)}${PluginVars.RESET}"
+        val desc = ""
+        val buttons = arrayOf(
+            arrayOf("${PluginVars.WHITE}${I18nManager.get("auth.login", player)}${PluginVars.RESET}"),
+            arrayOf("${PluginVars.WHITE}${I18nManager.get("auth.register", player)}${PluginVars.RESET}")
+        )
+
+
+        val menuId = Menus.registerMenu { p, choice ->
+            if (p == null) return@registerMenu
+            when (choice) {
+                0 -> logNameInput(p)
+                1 -> regNameInput(p)
+                else -> {}
+            }
+        }
+
+        Call.menu(player.con, menuId, title, desc, buttons)
+    }
+
+
+    fun showRevertMenu(player: Player) {
+        val revertPlayers = RevertBuild.getAllPlayersWithEdits()
+        val btns = mutableListOf<MenuEntry>()
+
+        btns.add(MenuEntry("${PluginVars.WHITE}${I18nManager.get("revert.all_players", player)}${PluginVars.RESET}") {
+            MenusManage.createTextInput(
+                title = I18nManager.get("revert.input_seconds.title", player),
+                desc = I18nManager.get("revert.input_seconds.desc", player),
+                isNum = true,
+                placeholder = "180"
+            ) { _, input ->
+                val seconds = input.toIntOrNull()
+                if (seconds == null || seconds < 1) {
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.WARN}${I18nManager.get("revert.invalid_input", player)}${PluginVars.RESET}"
+                    )
+                    return@createTextInput
+                }
+                RevertBuild.restoreAllPlayersEditsWithinSeconds(seconds)
+                Call.announce(
+                    player.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("revert.all_SUCCESS", player)}${PluginVars.RESET}"
+                )
+            }(player)
+        })
+
+        revertPlayers.forEach { uuid ->
+            val acc = DataManager.getPlayerDataByUuid(uuid)
+            val name = acc?.account ?: uuid.take(8)
+            btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
+                MenusManage.createTextInput(
+                    title = I18nManager.get("revert.input_seconds.title", player),
+                    desc = I18nManager.get("revert.input_seconds.desc", player),
+                    isNum = true,
+                    placeholder = "180"
+                ) { _, input ->
+                    val seconds = input.toIntOrNull()
+                    if (seconds == null || seconds < 1) {
+                        Call.announce(
+                            player.con,
+                            "${PluginVars.WARN}${I18nManager.get("revert.invalid_input", player)}${PluginVars.RESET}"
+                        )
+                        return@createTextInput
+                    }
+                    val target = Groups.player.find { it.uuid() == uuid }
+                    if (target != null) {
+                        restorePlayerEditsWithinSeconds(target, seconds)
+                        Call.announce(
+                            player.con,
+                            "${PluginVars.SUCCESS}${
+                                I18nManager.get(
+                                    "revert.player_SUCCESS",
+                                    player
+                                )
+                            } $name${PluginVars.RESET}"
+                        )
+                    } else {
+                        Call.announce(
+                            player.con,
+                            "${PluginVars.WARN}${
+                                I18nManager.get(
+                                    "revert.player_not_online",
+                                    player
+                                )
+                            }${PluginVars.RESET}"
+                        )
+                    }
+                }(player)
+            })
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("revert.title", player)}${PluginVars.RESET}" },
+            paged = false,
+            desc = { _, _, _ -> "${PluginVars.INFO}${I18nManager.get("revert.desc", player)}${PluginVars.RESET}" },
+            options = { _, _, _ -> btns }
+        )(player, 1)
+
+    }
+
+    val uploadMapMenuId: Int = Menus.registerMenu { p, choice ->
+        if (p == null) return@registerMenu
+        when (choice) {
+            0 -> Call.hideFollowUpMenu(p.con, uploadMapMenuId)
+            1 -> {
+                val url = "http://${DataManager.webUrl}:${DataManager.webPort}/?token=${TokensManager.create(p.uuid())}"
+                Call.openURI(p.con, url)
+            }
+        }
+    }
+
+    fun showUploadMapMenu(player: Player) {
+        val closeLabel = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
+        val openLabel = "${PluginVars.INFO}${I18nManager.get("open", player)}${PluginVars.RESET}"
+        val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel))
+        Call.menu(
+            player.con,
+            uploadMapMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("uploadMap", player)}${PluginVars.RESET}",
+            "\n${I18nManager.get("uploadDesc", player)}\n",
+            buttons
+        )
+    }
+
+    fun showVoteKickPlayerMenu(player: Player) {
+        val kickablePlayers = Groups.player.filter {
+            it != player && !isCoreAdmin(it.uuid()) && it.con != null
+        }
+        if (kickablePlayers.isEmpty()) {
+            Call.announce(
+                player.con,
+                "${PluginVars.WARN}${I18nManager.get("votekick.no_targets", player)}${PluginVars.RESET}"
+            )
+            return
+        }
+        val rows = kickablePlayers.map { target ->
+            MenuEntry("${PluginVars.WHITE}${target.name()}${PluginVars.RESET}") {
+                beginVotekick(player, target)
+            }
+        }
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ ->
+                "${PluginVars.WARN}${
+                    I18nManager.get(
+                        "votekick.menu.title",
+                        player
+                    )
+                }${PluginVars.RESET}"
+            },
+            paged = false,
+            desc = { _, _, _ -> I18nManager.get("votekick.menu.desc", player) },
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+    fun beginVotekick(viewer: Player, target: Player) {
+        val exclude = listOf(viewer, target)
+        VoteManager.createVote(
+            team = false,
+            p = viewer,
+            title = "${PluginVars.WARN}${I18nManager.get("playerINFO.votekick.title", viewer)}${PluginVars.RESET}",
+            desc = "${PluginVars.GRAY}${viewer.name}${
+                I18nManager.get(
+                    "playerINFO.votekick.desc",
+                    viewer
+                )
+            }: ${target.name()}${PluginVars.RESET}",
+            excludePlayers = exclude
+        ) { ok ->
+            if (ok) {
+                target.kick("")
+                restorePlayerEditsWithinSeconds(target, 200)
+            }
+        }
+    }
+
+}
