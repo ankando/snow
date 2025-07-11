@@ -66,17 +66,22 @@ val syncI18nBundles by tasks.registering {
         val srcDirs = listOf("src/main/kotlin", "src/main/java").map { file(it) }
         val resourcesDir = file("src/main/resources")
 
-        val keyRegex = Regex("""I18nManager\.get\(\s*"([^"]+)"|["'](helpCmd\.[^"']+)["']""")
+        val keyRegex = Regex("""I18nManager\.get\(\s*["']([^"']+)["']|["'](helpCmd\.[^"']+)["']""")
+
         val usedKeys = mutableSetOf<String>()
         srcDirs.filter { it.exists() }.forEach { dir ->
             dir.walkTopDown()
                 .filter { it.isFile && it.extension == "kt" }
                 .forEach { file ->
                     keyRegex.findAll(file.readText()).forEach { match ->
-                        usedKeys += match.groupValues[1]
+                        val key = match.groups[1]?.value ?: match.groups[2]?.value
+                        if (!key.isNullOrBlank()) {
+                            usedKeys += key
+                        }
                     }
                 }
         }
+
         val validKeys = usedKeys.filterNot { it.contains('$') }.sorted()
 
         val langMaps = mutableMapOf<String, LinkedHashMap<String, String>>()
