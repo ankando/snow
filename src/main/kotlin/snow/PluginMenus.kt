@@ -937,13 +937,13 @@ object PluginMenus {
         if (exists) {
             Call.announce(
                 player.con,
-                "${PluginVars.ERROR}${I18nManager.get("reg.name.duplicate", player)}${PluginVars.RESET}"
+                "${PluginVars.ERROR}${I18nManager.get("reg.name.duplicate", player)} ${PluginVars.RESET}"
             )
             return@createTextInput
         }
         Call.announce(
             player.con,
-            "${PluginVars.SUCCESS}${I18nManager.get("reg.success", player)}$name${PluginVars.RESET}"
+            "${PluginVars.SUCCESS}${I18nManager.get("reg.success", player)} $name${PluginVars.RESET}"
         )
         DataManager.registerPlayer(
             account = name,
