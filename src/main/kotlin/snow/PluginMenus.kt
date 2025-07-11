@@ -251,12 +251,11 @@ object PluginMenus {
             options = { p, _, _ ->
                 Vars.netServer.clientCommands.commandList
                     .sortedBy { it.text }
+                    .filter { it.text != "help" }
                     .map { cmd ->
                         val descKey = "helpCmd.${cmd.text}"
                         val desc = I18nManager.get(descKey, p)
-                        MenuEntry(
-                            "${PluginVars.WHITE}/${cmd.text} ${PluginVars.SECONDARY}${cmd.paramText}${PluginVars.RESET}\n" +
-                                    "${PluginVars.SECONDARY}$desc${PluginVars.RESET}"
+                        MenuEntry("${PluginVars.GRAY}$desc${PluginVars.RESET}"
                         ) { player ->
                             NetClient.sendChatMessage(player, "/${cmd.text}")
                         }
