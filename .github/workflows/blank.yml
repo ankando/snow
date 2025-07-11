@@ -53,7 +53,7 @@ jobs:
           git push origin "$TAG"
 
       - name: Build with Gradle
-        run: ./gradlew jar
+        run: ./gradlew wrapper && ./gradlew jar
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
