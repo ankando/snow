@@ -18,6 +18,9 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -53,7 +56,7 @@ jobs:
           git push origin "$TAG"
 
       - name: Build with Gradle
-        run: ./gradlew wrapper && ./gradlew jar
+        run: ./gradlew jar
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
