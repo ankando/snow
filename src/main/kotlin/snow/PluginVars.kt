@@ -8,7 +8,7 @@ object PluginVars {
     const val RATIO = 0.65
     const val TEAM_RATIO = 0.75
 
-    const val WHITE = "[#F1F1F1DD]"
+    const val WHITE = "[#F1F1F1CC]"
     const val GRAY = "[#D0D0D0EE]"
     const val INFO = "[#E0E0E0EE]"
     const val SECONDARY = "[#B0B0B0DD]"
