@@ -647,7 +647,7 @@ object PluginMenus {
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("lang.title", player)}${PluginVars.RESET}" },
-            desc = { _, _, _ -> I18nManager.get("lang.desc", player) },
+            desc = { _, _, _ -> ""},
             paged = false,
             options = { _, _, _ -> rows }
         )(player, 1)
