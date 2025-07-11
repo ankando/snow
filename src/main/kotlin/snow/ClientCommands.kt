@@ -13,6 +13,7 @@ import plugin.core.I18nManager
 import plugin.core.PermissionLevel
 import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PermissionManager.verifyPermissionLevel
+import plugin.core.PlayerTeamManager.playerTeams
 import plugin.core.Translator.translate
 import plugin.core.VoteManager
 import plugin.snow.PluginMenus.beginVotekick
@@ -144,12 +145,13 @@ object ClientCommands {
 
             Groups.player.each { receiver ->
                 if (receiver === player || receiver.team() != player.team()) return@each
-
+                val rPrefix = "${PluginVars.INFO}<${I18nManager.get("team.tag", receiver)}>${PluginVars.RESET} " +
+                        "${PluginVars.INFO}$playerName${PluginVars.RESET}: ${PluginVars.GRAY}"
                 val acc = DataManager.getPlayerDataByUuid(receiver.uuid())
                 val lang = acc?.lang ?: receiver.locale()
                 translate(message, "auto", lang, { translated ->
                     val msg = if (translated != message)
-                        "$prefix$message ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                        "$rPrefix$message ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
                     else
                         formatted
                     receiver.sendMessage(msg)
@@ -172,6 +174,10 @@ object ClientCommands {
 
             if (acc.isLock) {
                 Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("isLock", player)}${PluginVars.RESET}")
+                return@register
+            }
+            if (Vars.state.rules.pvp && playerTeams.contains(player.uuid())) {
+                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("logout.inPvP", player)}${PluginVars.RESET}")
                 return@register
             }
             if (args.isNotEmpty() && args[0].equals("all", ignoreCase = true)) {

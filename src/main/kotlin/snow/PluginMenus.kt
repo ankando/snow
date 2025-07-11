@@ -289,7 +289,7 @@ object PluginMenus {
                 buildString {
                     if (myScore > 0) {
                         append(
-                            "\n${PluginVars.GRAY}${
+                            "\n\n${PluginVars.GRAY}${
                                 I18nManager.get(
                                     "rank.your_rank",
                                     player
@@ -616,7 +616,8 @@ object PluginMenus {
             "zh_CN" to "${PluginVars.WHITE}中文${PluginVars.RESET}",
             "en" to "${PluginVars.WHITE}English${PluginVars.RESET}",
             "ru" to "${PluginVars.WHITE}Русский${PluginVars.RESET}",
-            "ja" to "${PluginVars.WHITE}日本語${PluginVars.RESET}"
+            "ja" to "${PluginVars.WHITE}日本語${PluginVars.RESET}",
+            "ko" to "${PluginVars.WHITE}한국인${PluginVars.RESET}"
         )
 
         val rows = langs.map { (code, display) ->

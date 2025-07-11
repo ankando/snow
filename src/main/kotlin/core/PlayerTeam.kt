@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 object PlayerTeamManager {
     // uuid -> Team
-    private val playerTeams = ConcurrentHashMap<String, Team>()
+    val playerTeams = ConcurrentHashMap<String, Team>()
 
     fun setTeam(player: Player, team: Team) {
         playerTeams[player.uuid()] = team

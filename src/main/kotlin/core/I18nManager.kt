@@ -7,7 +7,7 @@ import plugin.snow.PluginVars
 object I18nManager {
     private val langs = mutableMapOf<String, Map<String, String>>()
     private var default: Map<String, String> = emptyMap()
-    private val supportedLangs = listOf("en", "ru", "ja", "zh_CN")
+    private val supportedLangs = listOf("en", "ru", "ja", "ko", "zh_CN")
 
     fun init() {
         supportedLangs.forEach { lang ->

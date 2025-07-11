@@ -56,7 +56,7 @@ fun File.writeUtf8Lines(lines: List<String>) {
     }
 }
 
-val supportedLangs = listOf("en", "ru", "ja", "zh_CN")
+val supportedLangs = listOf("en", "ru", "ja", "ko", "zh_CN")
 
 val syncI18nBundles by tasks.registering {
     group = "build"
