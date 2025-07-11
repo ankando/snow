@@ -1189,7 +1189,7 @@ object PluginMenus {
     }
     fun showConfirmMenu(player: Player, onConfirm: (Player) -> Unit) {
         val title = I18nManager.get("confirm.title", player)
-        val desc = "\n${I18nManager.get("confirm.desc", player)}\n"
+        val desc = I18nManager.get("confirm.desc", player)
 
         createConfirmMenu(
             title = title,
