@@ -339,7 +339,7 @@ object PluginMenus {
         exclude.add(target)
 
         val desc = buildString {
-            append("${PluginVars.WHITE}${acc.account}${PluginVars.RESET}\n\n")
+            append("\n${PluginVars.WHITE}${acc.account}${PluginVars.RESET}\n\n")
             append(
                 "${PluginVars.SECONDARY}${
                     I18nManager.get(
