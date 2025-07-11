@@ -187,11 +187,14 @@ object EventManager {
             }
             val gamemode = modeMap[modeKey] ?: Gamemode.sandbox
 
+            Vars.state.rules = map.applyRules(gamemode)
+
             if (tags.contains("fly")) {
                 applyfly()
             } else applyUnfly()
 
-            Vars.state.rules = map.applyRules(gamemode)
+            Vars.state.rules.pvpAutoPause = false
+            Vars.state.rules.hideBannedBlocks = true
 
             val currentMapName = map.file.name()
             if (!usedMapNames.contains(currentMapName)) usedMapNames.add(currentMapName)
