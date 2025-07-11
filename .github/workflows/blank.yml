@@ -33,11 +33,11 @@ jobs:
           VERSION=$(grep '^version *= *' build.gradle.kts | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Check if tag exists
+      - name: Check if remote tag exists
         id: check_tag
         run: |
           TAG="v${{ steps.get_version.outputs.version }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
             echo "tag_exists=true" >> $GITHUB_OUTPUT
           else
             echo "tag_exists=false" >> $GITHUB_OUTPUT
