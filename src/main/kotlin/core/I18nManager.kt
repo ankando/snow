@@ -34,7 +34,7 @@ object I18nManager {
     }
 
     fun get(key: String, player: Player?, resolveEscape: Boolean = true): String {
-        val lang = player?.let { getPlayerDataByUuid(it.uuid())?.lang } ?: "en"
+        val lang = player?.let { getPlayerDataByUuid(it.uuid())?.lang } ?: (player?.locale() ?: "en")
         val code = lang.replace('-', '_')
         val finalCode = if (supportedLangs.contains(code)) code else "en"
         val rawValue = langs[finalCode]?.get(key) ?: default[key]
