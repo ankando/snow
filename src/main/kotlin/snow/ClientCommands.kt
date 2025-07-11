@@ -8,14 +8,10 @@ import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
-import plugin.core.DataManager
-import plugin.core.I18nManager
-import plugin.core.PermissionLevel
+import plugin.core.*
 import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PermissionManager.verifyPermissionLevel
-import plugin.core.PlayerTeamManager.playerTeams
 import plugin.core.Translator.translate
-import plugin.core.VoteManager
 import plugin.snow.PluginMenus.beginVotekick
 import plugin.snow.PluginMenus.showVoteKickPlayerMenu
 
@@ -163,7 +159,7 @@ object ClientCommands {
         register("logout", "[all]", "helpCmd.logout") { args, player ->
             val uuid = player.uuid()
             val acc = DataManager.getPlayerDataByUuid(uuid)
-
+            val team = PlayerTeamManager.getTeam(uuid)
             if (acc == null) {
                 Call.announce(
                     player.con,
@@ -176,7 +172,7 @@ object ClientCommands {
                 Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("isLock", player)}${PluginVars.RESET}")
                 return@register
             }
-            if (Vars.state.rules.pvp && playerTeams.contains(player.uuid())) {
+            if (Vars.state.rules.pvp && team != null) {
                 Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("logout.inPvP", player)}${PluginVars.RESET}")
                 return@register
             }
