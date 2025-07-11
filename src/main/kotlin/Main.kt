@@ -48,13 +48,13 @@ class MyBlockIndexer : BlockIndexer() {
 }
 
 class Main : Plugin() {
-    private val calmInvalidHandler = NetServer.InvalidCommandHandler { _, res ->
+    private val calmInvalidHandler = NetServer.InvalidCommandHandler { player, res ->
         when (res.type) {
             CommandHandler.ResponseType.manyArguments ->
                 "${PluginVars.WARN}${
                     I18nManager.get(
                         "cmd.too_many_args",
-                        null
+                        player
                     )
                 } ${PluginVars.INFO}${res.command.text} ${res.command.paramText}${PluginVars.RESET}"
 
@@ -62,7 +62,7 @@ class Main : Plugin() {
                 "${PluginVars.WARN}${
                     I18nManager.get(
                         "cmd.too_few_args",
-                        null
+                        player
                     )
                 } ${PluginVars.INFO}${res.command.text} ${res.command.paramText}${PluginVars.RESET}"
 
@@ -76,9 +76,9 @@ class Main : Plugin() {
                     }
                 }
                 if (hint != null)
-                    "${PluginVars.INFO}${I18nManager.get("cmd.hint", null)} /${hint.text}${PluginVars.RESET}"
+                    "${PluginVars.INFO}${I18nManager.get("cmd.hint", player)} /${hint.text}${PluginVars.RESET}"
                 else
-                    "${PluginVars.WARN}${I18nManager.get("cmd.unknown", null)}${PluginVars.RESET}"
+                    "${PluginVars.WARN}${I18nManager.get("cmd.unknown", player)}${PluginVars.RESET}"
             }
         }
     }

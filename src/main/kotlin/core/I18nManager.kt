@@ -11,8 +11,8 @@ object I18nManager {
 
     fun init() {
         supportedLangs.forEach { lang ->
-            if (lang == "en") loadBundle("bundle.properties", "en")
-            else loadBundle("bundle_${lang}.properties", lang)
+            val fileName = if (lang == "en") "bundle.properties" else "bundle_${lang}.properties"
+            loadBundle(fileName, lang)
         }
     }
 
@@ -23,6 +23,7 @@ object I18nManager {
             langs[lang] = emptyMap()
             return
         }
+
         val lines = stream.bufferedReader(Charsets.UTF_8).readLines()
         val map = lines.mapNotNull {
             val idx = it.indexOf('=')
@@ -32,15 +33,13 @@ object I18nManager {
         langs[lang] = map
     }
 
-    fun get(key: String, player: Player?): String {
+    fun get(key: String, player: Player?, resolveEscape: Boolean = true): String {
         val lang = player?.let { getPlayerDataByUuid(it.uuid())?.lang } ?: "en"
         val code = lang.replace('-', '_')
         val finalCode = if (supportedLangs.contains(code)) code else "en"
+        val rawValue = langs[finalCode]?.get(key) ?: default[key]
 
-        val value = langs[finalCode]?.get(key)
-        if (!value.isNullOrEmpty()) return value
-        val def = default[key]
-        if (!def.isNullOrEmpty()) return def
-        return PluginVars.WARN + key + PluginVars.RESET
+        val result = rawValue?.takeIf { it.isNotBlank() } ?: (PluginVars.WARN + key + PluginVars.RESET)
+        return if (resolveEscape) result.replace("\\n", "\n") else result
     }
 }

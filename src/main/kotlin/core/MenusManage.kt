@@ -143,7 +143,7 @@ object MenusManage {
                         onResult(p, choice)
                     }
                 }
-                Call.menu(player.con, menuId, title, desc, arrayOf(arrayOf(yesText, noText)))
+                Call.menu(player.con, menuId, title, "\n$desc\n", arrayOf(arrayOf(yesText, noText)))
             }
         }
     }

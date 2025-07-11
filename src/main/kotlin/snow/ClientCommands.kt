@@ -31,57 +31,58 @@ object ClientCommands {
         fun register(
             name: String,
             args: String,
+            desc: String,
             required: PermissionLevel = PermissionLevel.NORMAL,
             exec: (Array<String>, Player) -> Unit
         ) {
             handler.register<Player>(
                 name,
                 args,
-                I18nManager.get("cmd.$name.desc", null)
+                desc
             ) { args, player ->
                 verifyPermissionLevel(player, required) {
                     exec(args, player)
                 }
             }
         }
-
-        register("help", "[page]") { args, player ->
+        register("help", "[page]", "helpCmd.help") { args, player ->
             val page = parsePageArg(args)
             PluginMenus.showHelpMenu(player, page)
         }
-        register("maps", "[page]") { args, player ->
+        register("maps", "[page]", "helpCmd.maps") { args, player ->
             val page = parsePageArg(args)
             PluginMenus.showMapMenu(player, page)
         }
-        register("rank", "[page]") { args, player ->
+        register("rank", "[page]", "helpCmd.rank") { args, player ->
             val page = parsePageArg(args)
             PluginMenus.showRankMenu(player, page)
         }
-        register("players", "") { args, player ->
+        register("players", "", "helpCmd.players") { args, player ->
             PluginMenus.showPlayersMenu(player, 1)
         }
-        register("join", "") { _, player ->
+        register("join", "", "helpCmd.join") { _, player ->
             if (player.team() != Team.derelict) {
-                Call.announce(player.con, I18nManager.get("join.joined", player)); return@register
+                Call.announce(player.con, I18nManager.get("join.joined", player))
+                return@register
             }
             PluginMenus.showTeamMenu(player)
         }
-        register("rules", "", PermissionLevel.MEMBER) { _, player ->
+        register("rules", "", "helpCmd.rules", PermissionLevel.MEMBER) { _, player ->
             PluginMenus.showRulesMenu(player)
         }
-        register("INFO", "") { _, player ->
+        register("info", "", "helpCmd.info") { _, player ->
             PluginMenus.showMapInfoMenu(player, Vars.state.map)
         }
-        register("upload", "", PermissionLevel.MEMBER) { _, player ->
+        register("upload", "", "helpCmd.upload", PermissionLevel.MEMBER) { _, player ->
             PluginMenus.showUploadMapMenu(player)
         }
-        register("revert", "", PermissionLevel.CORE_ADMIN) { _, player ->
+        register("revert", "", "helpCmd.revert", PermissionLevel.CORE_ADMIN) { _, player ->
             PluginMenus.showRevertMenu(player)
         }
-        register("profile", "") { _, player ->
+        register("profile", "", "helpCmd.profile") { _, player ->
             PluginMenus.showSetProfileMenu(player)
         }
-        register("sync", "") { _, player ->
+        register("sync", "", "helpCmd.sync") { _, player ->
             if (!player.isLocal) {
                 if (Time.timeSinceMillis(player.info.lastSyncTime) < 1000 * 5) {
                     return@register
@@ -91,7 +92,7 @@ object ClientCommands {
                 netServer.sendWorldData(player)
             }
         }
-        register("votekick", "[player] [reason]", PermissionLevel.MEMBER) { args, player ->
+        register("votekick", "[player] [reason]", "helpCmd.votekick", PermissionLevel.MEMBER) { args, player ->
             if (Groups.player.size() < 3) {
                 Call.announce(
                     player.con,
@@ -130,43 +131,34 @@ object ClientCommands {
             if (args.size > 1) args.copyOfRange(1, args.size).joinToString(" ") else ""
             beginVotekick(player, target)
         }
-
-        register("t", "<...>") { args, player ->
+        register("t", "<...>", "helpCmd.t") { args, player ->
             if (args.isEmpty()) return@register
 
             val message = args.joinToString(" ")
             val playerName = player.name() ?: I18nManager.get("unknown", player)
-            val prefix = "${PluginVars.INFO}${I18nManager.get("team.tag", player)}${PluginVars.RESET} " +
+            val prefix = "${PluginVars.INFO}<${I18nManager.get("team.tag", player)}>${PluginVars.RESET} " +
                     "${PluginVars.INFO}$playerName${PluginVars.RESET}: ${PluginVars.GRAY}"
             val formatted = "$prefix$message${PluginVars.RESET}"
 
             player.sendMessage(formatted)
 
             Groups.player.each { receiver ->
-                if (receiver === player) return@each
-                if (receiver.team() != player.team()) return@each
+                if (receiver === player || receiver.team() != player.team()) return@each
 
                 val acc = DataManager.getPlayerDataByUuid(receiver.uuid())
                 val lang = acc?.lang ?: receiver.locale()
-                val needsTranslation = !lang.isNullOrEmpty() && lang != "off"
-
-                if (needsTranslation) {
-                    translate(message, "auto", lang, { translated ->
-                        val msg = if (translated != message)
-                            "$prefix$message ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
-                        else
-                            formatted
-                        receiver.sendMessage(msg)
-                    }, {
-                        receiver.sendMessage(formatted)
-                    })
-                } else {
+                translate(message, "auto", lang, { translated ->
+                    val msg = if (translated != message)
+                        "$prefix$message ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                    else
+                        formatted
+                    receiver.sendMessage(msg)
+                }, {
                     receiver.sendMessage(formatted)
-                }
+                })
             }
         }
-
-        register("logout", "[all]") { args, player ->
+        register("logout", "[all]", "helpCmd.logout") { args, player ->
             val uuid = player.uuid()
             val acc = DataManager.getPlayerDataByUuid(uuid)
 
@@ -200,8 +192,7 @@ object ClientCommands {
                 )
             }
         }
-        register("surrender", "", PermissionLevel.MEMBER) { _, player ->
-
+        register("surrender", "", "helpCmd.surrender", PermissionLevel.MEMBER) { _, player ->
             val team = player.team()
             val teamPlayerCount = Groups.player.count { it.team() == team && !it.dead() }
             if (team == Team.derelict || !team.data().hasCore() || teamPlayerCount < 3) {
@@ -219,22 +210,12 @@ object ClientCommands {
             ) { ok ->
                 if (ok) {
                     team.cores().forEach { core ->
-                        val x = core.x
-                        val y = core.y
                         mindustry.entities.Damage.damage(
-                            Team.derelict,
-                            x, y,
-                            1.2f,
-                            9999999f,
-                            false,
-                            false
+                            Team.derelict, core.x, core.y,
+                            1.2f, 9999999f, false, false
                         )
                     }
-                    Groups.build.each { build ->
-                        if (build.team == team) {
-                            build.kill()
-                        }
-                    }
+                    Groups.build.each { if (it.team == team) it.kill() }
                     Groups.player.each { p ->
                         if (p.team() == team) {
                             Call.announce(

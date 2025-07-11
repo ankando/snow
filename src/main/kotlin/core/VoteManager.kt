@@ -93,8 +93,6 @@ object VoteManager {
             onResult = { player, choice ->
                 if (choice == 0) addVote(player.uuid())
             },
-            yesText = PluginVars.SUCCESS + I18nManager.get("vote.ok", null) + PluginVars.RESET,
-            noText = PluginVars.WARN + I18nManager.get("vote.no", null) + PluginVars.RESET
         )
         voters.forEach { voteMenu(it) }
     }
@@ -132,7 +130,7 @@ object VoteManager {
             Groups.player.each { p ->
                 Call.announce(
                     p.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("vote.SUCCESS", p)}${PluginVars.RESET}"
+                    "${PluginVars.SUCCESS}${I18nManager.get("vote.success", p)}${PluginVars.RESET}"
                 )
             }
             session.callback(true)

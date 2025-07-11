@@ -49,8 +49,6 @@ object NetEvents {
                 if (receiver == sender) return@each
                 val acc = DataManager.getPlayerDataByUuid(receiver.uuid())
                 val lang = acc?.lang ?: receiver.locale()
-                val needsTranslation = !lang.isNullOrEmpty() && lang != "off"
-                if (needsTranslation) {
                     translate(msg, "auto", lang, { translated ->
                         val disp =
                             if (translated != msg) "$msg ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}" else msg
@@ -58,9 +56,6 @@ object NetEvents {
                     }, {
                         receiver.sendMessage("$senderTag: ${PluginVars.GRAY}$msg${PluginVars.RESET}")
                     })
-                } else {
-                    receiver.sendMessage("$senderTag: ${PluginVars.GRAY}$msg${PluginVars.RESET}")
-                }
             }
         }
 
@@ -89,7 +84,7 @@ object NetEvents {
         Events.fire(EventType.AdminRequestEvent(admin, target, action))
         when (action) {
             AdminAction.kick -> {
-                restorePlayerEditsWithinSeconds(target, 200)
+                restorePlayerEditsWithinSeconds(target.uuid(), 200)
                 Call.announce(
                     "${PluginVars.WARN}${admin.name()} ${
                         I18nManager.get(
@@ -102,7 +97,7 @@ object NetEvents {
             }
 
             AdminAction.ban -> {
-                restorePlayerEditsWithinSeconds(target, 200)
+                restorePlayerEditsWithinSeconds(target.uuid(), 200)
                 Call.announce(
                     "${PluginVars.WARN}${admin.name()} ${
                         I18nManager.get(

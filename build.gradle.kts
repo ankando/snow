@@ -1,83 +1,5 @@
-import java.util.Properties
+import java.io.File
 
-val updateBundleWithUsedKeys by tasks.registering {
-    group = "build"
-    description = "Scan code for I18nManager in bundle.properties"
-
-    val srcDirs = listOf("src/main/kotlin", "src/main/java").map { file(it) }
-    val resourcesDir = file("src/main/resources")
-    val bundleFile = File(resourcesDir, "bundle.properties")
-
-    val keyRegex = Regex("""I18nManager\.get\(\s*"(.*?)"""")
-    val allKeys = mutableSetOf<String>()
-    srcDirs.filter { it.exists() }.forEach { dir ->
-        dir.walkTopDown()
-            .filter { it.isFile && (it.extension == "kt") }
-            .forEach { file ->
-                file.forEachLine { line ->
-                    keyRegex.findAll(line).forEach { match ->
-                        allKeys += match.groupValues[1]
-                    }
-                }
-            }
-    }
-
-    val bundleProps = Properties().apply {
-        if (bundleFile.exists()) bundleFile.inputStream().use { load(it) }
-    }
-
-    var changed = false
-    allKeys.forEach { key ->
-        if (!bundleProps.containsKey(key)) {
-            bundleProps.setProperty(key, "")
-            println("Add i18n key: $key")
-            changed = true
-        }
-    }
-
-    if (changed) {
-        bundleFile.outputStream().use {
-            bundleProps.store(it, "Auto-added keys from code scan")
-        }
-        println("bundle.properties updated!")
-    } else {
-        println("No missing i18n keys found.")
-    }
-}
-val supportedLangs = listOf("en", "ru", "ja", "zh_CN")
-
-val alignI18nBundles by tasks.registering {
-    group = "build"
-    description = "Ensure all i18n bundles match the keys and order of bundle.properties"
-
-    val resourcesDir = file("src/main/resources")
-    val baseFile = File(resourcesDir, "bundle.properties")
-    val baseProps = LinkedHashMap<String, String>().apply {
-        if (baseFile.exists()) {
-            baseFile.inputStream().use {
-                Properties().apply { load(it) }
-                    .forEach { k, v -> put(k as String, v as String) }
-            }
-        }
-    }
-
-    supportedLangs.filter { it != "en" }.forEach { lang ->
-        val langFile = File(resourcesDir, "bundle_${lang}.properties")
-        val langProps = Properties().apply {
-            if (langFile.exists()) langFile.inputStream().use { load(it) }
-        }
-        val langMap = langProps.stringPropertyNames().associateWith { langProps.getProperty(it) }
-
-        val output = StringBuilder()
-        output.append("# Synced with bundle.properties\n")
-        baseProps.forEach { (key, _) ->
-            val value = langMap[key] ?: ""
-            output.append("$key=$value\n")
-        }
-        langFile.writeText(output.toString())
-        println("Aligned: bundle_${lang}.properties")
-    }
-}
 plugins {
     java
     kotlin("jvm") version "2.1.20"
@@ -92,23 +14,117 @@ repositories {
     maven(url = "https://www.jitpack.io")
 }
 
-
 dependencies {
     compileOnly("com.github.Anuken.Arc:arc-core:v149")
     compileOnly("com.github.Anuken.Mindustry:core:v149")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
+tasks.withType<JavaCompile> {
+    options.encoding = "UTF-8"
+}
+
+tasks.withType<ProcessResources> {
+    filesMatching("**/*.properties") {}
+}
+
+fun File.safeReadUtf8Lines(): List<String> {
+    val bytes = readBytes()
+    return when {
+        bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte() ->
+            String(bytes, Charsets.UTF_8).lines()
+        else -> {
+            try {
+                String(bytes, Charsets.UTF_8)
+            } catch (_: Exception) {
+                String(bytes)
+            }.lines()
+        }
+    }
+}
+
+fun File.writeUtf8Lines(lines: List<String>) {
+    outputStream().use { os ->
+        lines.forEachIndexed { idx, line ->
+            os.write(line.toByteArray(Charsets.UTF_8))
+            if (idx != lines.size - 1) os.write('\n'.code)
+        }
+    }
+}
+
+val supportedLangs = listOf("en", "ru", "ja", "zh_CN")
+
+val syncI18nBundles by tasks.registering {
+    group = "build"
+    description = "Sync and align all i18n bundles"
+
+    doLast {
+        val srcDirs = listOf("src/main/kotlin", "src/main/java").map { file(it) }
+        val resourcesDir = file("src/main/resources")
+
+        val keyRegex = Regex("""I18nManager\.get\(\s*["']([^"']+)["']|["'](helpCmd\.[^"']+)["']""")
+
+        val usedKeys = mutableSetOf<String>()
+        srcDirs.filter { it.exists() }.forEach { dir ->
+            dir.walkTopDown()
+                .filter { it.isFile && it.extension == "kt" }
+                .forEach { file ->
+                    keyRegex.findAll(file.readText()).forEach { match ->
+                        val key = match.groups[1]?.value ?: match.groups[2]?.value
+                        if (!key.isNullOrBlank()) {
+                            usedKeys += key
+                        }
+                    }
+                }
+        }
+
+        val validKeys = usedKeys.filterNot { it.contains('$') }.sorted()
+
+        val langMaps = mutableMapOf<String, LinkedHashMap<String, String>>()
+        for (lang in supportedLangs) {
+            val file = if (lang == "en")
+                File(resourcesDir, "bundle.properties")
+            else
+                File(resourcesDir, "bundle_${lang}.properties")
+
+            val lines = if (file.exists()) file.safeReadUtf8Lines() else emptyList()
+            val map = linkedMapOf<String, String>()
+            lines.forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isEmpty() || trimmed.startsWith("#") || !trimmed.contains("=")) return@forEach
+                val idx = trimmed.indexOf("=")
+                val key = trimmed.substring(0, idx).trim()
+                val value = trimmed.substring(idx + 1).trim()
+                map[key] = value
+            }
+            langMaps[lang] = map
+        }
+
+        for ((lang, map) in langMaps) {
+            val file = if (lang == "en")
+                File(resourcesDir, "bundle.properties")
+            else
+                File(resourcesDir, "bundle_${lang}.properties")
+
+            val newLines = validKeys.map { key ->
+                "$key=${map[key] ?: ""}"
+            }
+
+            file.writeUtf8Lines(newLines)
+            println("Synced: ${file.name}, keys: ${newLines.size}")
+        }
+    }
+}
+
 tasks.jar {
-    dependsOn(updateBundleWithUsedKeys)
-    dependsOn(alignI18nBundles)
+    dependsOn(syncI18nBundles)
     archiveFileName.set("${project.name}.jar")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from({
         configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }
     })
-}
-
-kotlin {
-    jvmToolchain(17)
 }

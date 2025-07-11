@@ -32,8 +32,7 @@ object RevertBuild {
         map.put(pos, BlockEdit(block, teamId, rotation, System.nanoTime()))
     }
 
-    fun restorePlayerEditsWithinSeconds(player: Player, seconds: Int) {
-        val uuid = player.uuid()
+    fun restorePlayerEditsWithinSeconds(uuid: String, seconds: Int) {
         val edits = lastEdits[uuid] ?: return
         val now = System.nanoTime()
         val cutoff = seconds.toLong() * 1_000_000_000L
