@@ -254,6 +254,7 @@ object PluginMenus {
                     .sortedBy { it.text }
                     .filter { it.text != "help" }
                     .filter { it.text != "t" }
+                    .filter { it.text != "votekick" }
                     .map { cmd ->
                         val descKey = "helpCmd.${cmd.text}"
                         val desc = I18nManager.get(descKey, p)
