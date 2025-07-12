@@ -44,7 +44,6 @@ object EventManager {
             val cx = Vars.world.width() * Vars.tilesize / 2f
             val cy = Vars.world.height() * Vars.tilesize / 2f
             Call.sound(Sounds.explosionbig, cx, cy, 1f)
-
             val allTeams = PlayerTeamManager.all()
             val teamSizes = allTeams.values.filter { it != Team.derelict }.groupingBy { it }.eachCount()
 

@@ -1,5 +1,6 @@
 package plugin.core
 
+import mindustry.Vars
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
@@ -28,6 +29,7 @@ object VoteManager {
         excludePlayers: List<Player>? = null,
         callback: (Boolean) -> Unit
     ) {
+        if (!Vars.state.isGame) return
         if (Groups.player.count { PermissionManager.isNormal(it.uuid()) } <= 1) {
             Call.announce(creator.con, "${PluginVars.ERROR}${I18nManager.get("vote.notenough", creator)}${PluginVars.RESET}")
             return

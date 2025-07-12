@@ -2,6 +2,7 @@ package plugin
 
 import arc.util.CommandHandler
 import arc.util.Strings
+import arc.util.Time
 import mindustry.Vars
 import mindustry.core.NetServer
 import mindustry.game.Team
@@ -20,6 +21,7 @@ import plugin.snow.PluginTimer
 import plugin.snow.PluginVars
 
 class Main : Plugin() {
+    private val lastDeposit = mutableMapOf<String, Long>()
 
     private val invalidCommandHandler = NetServer.InvalidCommandHandler { player, res ->
         val key = when (res.type) {
@@ -83,9 +85,26 @@ class Main : Plugin() {
             if (!player.team().data().hasCore() || player.team() == Team.derelict) return@addActionFilter false
             if (PermissionManager.isBanned(player.uuid())) return@addActionFilter false
 
+            val uuid = player.uuid()
+            val now = Time.nanos()
+
             if (action.type == ActionType.breakBlock) {
                 action.tile?.let { RevertBuild.recordRemove(player, it) }
             }
+
+            if (action.type == ActionType.depositItem) {
+                val last = lastDeposit[uuid] ?: 0L
+                if (last != 0L) {
+                    if (now < last) {
+                        lastDeposit.clear()
+                    } else if (now - last < 800_000_000L) {
+                        player.kick(I18nManager.get("autofill", player), 0)
+                        return@addActionFilter false
+                    }
+                }
+                lastDeposit[uuid] = now
+            }
+
             true
         }
     }

@@ -1,16 +1,16 @@
 package plugin.snow
 
+import arc.Events
 import arc.math.Mathf
 import mindustry.Vars
 import mindustry.content.Blocks
 import mindustry.core.NetClient
-import mindustry.game.Gamemode
+import mindustry.game.EventType
 import mindustry.game.Rules
 import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
-import mindustry.net.WorldReloader
 import mindustry.type.UnitType
 import mindustry.ui.Menus
 import mindustry.world.Block
@@ -496,26 +496,11 @@ object PluginMenus {
 
 
     private fun reloadWorld(map: mindustry.maps.Map) {
-        try {
-            val modeMap = mapOf(
-                "pvp" to Gamemode.pvp,
-                "survival" to Gamemode.survival,
-                "sandbox" to Gamemode.sandbox,
-                "attack" to Gamemode.attack
-            )
-
-            val modeKey = arc.Core.settings.get("lastServerMode", "sandbox").toString().lowercase()
-            val gameMode = modeMap[modeKey] ?: Gamemode.sandbox
-
-            val reloader = WorldReloader()
-            reloader.begin()
-            Vars.state.map = map
-            Vars.world.loadMap(map)
-            Vars.state.rules = map.applyRules(gameMode)
-            Vars.logic.play()
-            reloader.end()
-        } catch (_: Exception) {
+        if(Vars.state.isMenu){
+            return
         }
+        Vars.maps.setNextMapOverride(map)
+        Events.fire(EventType.GameOverEvent(Team.derelict))
     }
 
 
@@ -539,7 +524,7 @@ object PluginMenus {
                 )
             } else {
                 if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60) {
-                    Call.announce("${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
+                    Call.announce(player.con,"${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
                     return@MenuEntry
                 }
                 showConfirmMenu(player) {
