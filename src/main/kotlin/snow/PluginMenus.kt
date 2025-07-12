@@ -394,7 +394,7 @@ object PluginMenus {
                             viewer
                         )
                     }${PluginVars.RESET}",
-                    desc = "${PluginVars.GRAY}${viewer.name}${
+                    desc = "${PluginVars.GRAY}${viewer.name} ${
                         I18nManager.get(
                             "playerInfo.votekick.desc",
                             viewer
