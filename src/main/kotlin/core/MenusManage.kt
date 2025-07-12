@@ -8,6 +8,7 @@ import plugin.snow.PluginVars
 import kotlin.math.max
 
 object MenusManage {
+
     fun <T> createMenu(
         title: (Player, Int, Int, T?) -> String,
         desc: ((Player, Int, T?) -> String)? = null,
@@ -16,138 +17,121 @@ object MenusManage {
         options: (Player, T?, Int) -> List<MenuEntry>,
         extraData: ((Player) -> T?)? = null
     ): (Player, Int) -> Unit {
-        val menuPageMap = mutableMapOf<String, Int>()
+        val pageMap = mutableMapOf<String, Int>()
         val dataCache = mutableMapOf<String, T?>()
 
         val menuHolder = object {
-            lateinit var showMenu: (Player, Int) -> Unit
+            lateinit var show: (Player, Int) -> Unit
             var menuId: Int = -1
         }
 
         menuHolder.menuId = Menus.registerMenu { p, choice ->
             if (p == null) return@registerMenu
+
             verifyPermissionLevel(p, PermissionLevel.NORMAL) {
-                val curPage = menuPageMap[p.uuid()] ?: 1
-                val myData = dataCache[p.uuid()]
-                val allData = options(p, myData, curPage)
+                val uuid = p.uuid()
+                val currentPage = pageMap[uuid] ?: 1
+                val userData = dataCache[uuid]
+                val entries = options(p, userData, currentPage)
 
                 if (!paged) {
                     when (choice) {
                         0 -> Call.hideFollowUpMenu(p.con, menuHolder.menuId)
-                        in 1..allData.size -> allData[choice - 1].onClick?.invoke(p)
+                        in 1..entries.size -> entries[choice - 1].onClick?.invoke(p)
                     }
                 } else {
-                    val totalPages = max(1, (allData.size + perPage - 1) / perPage)
-                    val currentPage = curPage.coerceIn(1, totalPages)
-                    val start = (currentPage - 1) * perPage
-                    val end = minOf(start + perPage, allData.size)
+                    val totalPages = max(1, (entries.size + perPage - 1) / perPage)
+                    val page = currentPage.coerceIn(1, totalPages)
+                    val start = (page - 1) * perPage
+                    val end = minOf(start + perPage, entries.size)
 
                     when (choice) {
-                        0 -> {
-                            val prev = if (totalPages == 1) 1 else if (currentPage == 1) totalPages else currentPage - 1
-                            menuHolder.showMenu(p, prev)
-                        }
-
+                        0 -> menuHolder.show(p, if (page == 1) totalPages else page - 1)
                         1 -> Call.hideFollowUpMenu(p.con, menuHolder.menuId)
-                        2 -> {
-                            val next = if (totalPages == 1) 1 else if (currentPage == totalPages) 1 else currentPage + 1
-                            menuHolder.showMenu(p, next)
-                        }
-
+                        2 -> menuHolder.show(p, if (page == totalPages) 1 else page + 1)
                         in 3 until (end - start + 3) -> {
                             val idx = start + (choice - 3)
-                            if (idx in allData.indices) allData[idx].onClick?.invoke(p)
+                            if (idx in entries.indices) entries[idx].onClick?.invoke(p)
                         }
                     }
                 }
             }
         }
 
-        menuHolder.showMenu = { player, page ->
+        menuHolder.show = { player, page ->
             verifyPermissionLevel(player, PermissionLevel.NORMAL) {
-                val myData = extraData?.invoke(player)
-                dataCache[player.uuid()] = myData
+                val uuid = player.uuid()
+                val userData = extraData?.invoke(player)
+                dataCache[uuid] = userData
 
-                val allData = options(player, myData, page)
+                val entries = options(player, userData, page)
 
                 if (!paged) {
                     val buttons = mutableListOf<Array<String?>>()
-                    buttons.add(arrayOf(PluginVars.SECONDARY + PluginVars.ICON_CLOSE + PluginVars.RESET))
-                    for (entry in allData) {
-                        buttons.add(arrayOf(entry.label))
-                    }
+                    buttons.add(arrayOf("${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"))
+                    entries.forEach { buttons.add(arrayOf(it.label)) }
+
                     Call.followUpMenu(
                         player.con,
                         menuHolder.menuId,
-                        title(player, 1, 1, myData),
-                        desc?.invoke(player, 1, myData) ?: "",
+                        title(player, 1, 1, userData),
+                        desc?.invoke(player, 1, userData) ?: "",
                         buttons.toTypedArray()
                     )
                 } else {
-                    val totalPages = max(1, (allData.size + perPage - 1) / perPage)
-                    val onlyOnePage = totalPages == 1
+                    val totalPages = max(1, (entries.size + perPage - 1) / perPage)
                     val currentPage = when {
                         page < 1 -> totalPages
                         page > totalPages -> 1
                         else -> page
                     }
-                    menuPageMap[player.uuid()] = currentPage
+                    pageMap[uuid] = currentPage
 
                     val start = (currentPage - 1) * perPage
-                    val end = minOf(start + perPage, allData.size)
-                    val pageData = allData.subList(start, end)
+                    val end = minOf(start + perPage, entries.size)
+                    val pageEntries = entries.subList(start, end)
 
-                    val prevLabel =
-                        if (onlyOnePage || currentPage == 1) "" else PluginVars.SECONDARY + PluginVars.ICON_PREV + PluginVars.RESET
-                    val nextLabel =
-                        if (onlyOnePage || currentPage == totalPages) "" else PluginVars.SECONDARY + PluginVars.ICON_NEXT + PluginVars.RESET
+                    val prev = if (totalPages == 1 || currentPage == 1) "" else "${PluginVars.SECONDARY}${PluginVars.ICON_LEFT}${PluginVars.RESET}"
+                    val next = if (totalPages == 1 || currentPage == totalPages) "" else "${PluginVars.SECONDARY}${PluginVars.ICON_NEXT}${PluginVars.RESET}"
 
                     val buttons = mutableListOf<Array<String?>>()
-                    buttons.add(
-                        arrayOf(
-                            prevLabel,
-                            PluginVars.SECONDARY + PluginVars.ICON_CLOSE + PluginVars.RESET,
-                            nextLabel
-                        )
-                    )
-                    for (entry in pageData) {
-                        buttons.add(arrayOf(entry.label))
-                    }
+                    buttons.add(arrayOf(prev, "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}", next))
+                    pageEntries.forEach { buttons.add(arrayOf(it.label)) }
+
                     Call.followUpMenu(
                         player.con,
                         menuHolder.menuId,
-                        title(player, currentPage, totalPages, myData),
-                        desc?.invoke(player, currentPage, myData) ?: "",
+                        title(player, currentPage, totalPages, userData),
+                        desc?.invoke(player, currentPage, userData) ?: "",
                         buttons.toTypedArray()
                     )
                 }
             }
         }
 
-        return menuHolder.showMenu
+        return menuHolder.show
     }
-
 
     fun createConfirmMenu(
         title: String,
         desc: String,
         onResult: (Player, Int?) -> Unit,
-        yesText: String = PluginVars.GRAY + PluginVars.ICON_PREV + PluginVars.RESET,
-        noText: String = PluginVars.GRAY + PluginVars.ICON_CLOSE + PluginVars.RESET
+        yesText: String = "${PluginVars.GRAY}${PluginVars.ICON_OK}${PluginVars.RESET}",
+        noText: String = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
     ): (Player) -> Unit {
         return { player ->
             verifyPermissionLevel(player, PermissionLevel.NORMAL) {
                 val menuId = Menus.registerMenu { p, choice ->
-                    if (p == null) return@registerMenu
-                    verifyPermissionLevel(p, PermissionLevel.NORMAL) {
-                        onResult(p, choice)
+                    if (p != null) {
+                        verifyPermissionLevel(p, PermissionLevel.NORMAL) {
+                            onResult(p, choice)
+                        }
                     }
                 }
                 Call.menu(player.con, menuId, title, "\n$desc\n", arrayOf(arrayOf(yesText, noText)))
             }
         }
     }
-
 
     fun createTextInput(
         title: String,

@@ -4,14 +4,11 @@ import arc.util.Timer
 import mindustry.Vars
 import mindustry.net.Administration
 import plugin.core.DataManager
-import plugin.core.VoteManager.endVotes
+import plugin.core.VoteManager
 
 object PluginTimer {
     private fun formatGameTime(): String {
-        val ticks = Vars.state.tick.toLong()
-        val totalSeconds = ticks / 60
-        val minutes = (totalSeconds / 60).toInt()
-
+        val minutes = (Vars.state.tick / 3600).toInt()
         return buildString {
             append(PluginVars.WARN)
             append("Game started $minutes minute")
@@ -21,14 +18,16 @@ object PluginTimer {
         }
     }
 
-
     fun init() {
         Timer.schedule({
             if (!Vars.state.isGame) return@schedule
-            endVotes()
+
+            VoteManager.endVotes()
+
             if (DataManager.needSave) {
                 DataManager.saveAll()
             }
+
             Administration.Config.desc.set(formatGameTime())
         }, 5f, 5f)
     }

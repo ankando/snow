@@ -197,10 +197,8 @@ object WebUploader {
         private fun notFound() = newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "not found")
     }
 
-
     private fun verifyToken(token: String?): String? {
-        if (token.isNullOrBlank()) return null
-        val uuid = TokensManager.validTokens[token]?.uuid ?: return null
-        return if (TokensManager.verifyToken(token, uuid)) uuid else null
+        return TokensManager.getTokenOwner(token)
     }
+
 }

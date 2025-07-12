@@ -342,28 +342,20 @@ object PluginMenus {
         val desc = buildString {
             append("\n${PluginVars.WHITE}${acc.account}${PluginVars.RESET}\n\n")
             append(
-                "${PluginVars.SECONDARY}${
-                    I18nManager.get(
-                        "playerInfo.score",
-                        viewer
-                    )
-                }: ${acc.score}${PluginVars.RESET}\n"
+                "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.score", viewer)}: ${acc.score}${PluginVars.RESET}\n"
             )
             append(
-                "${PluginVars.SECONDARY}${
-                    I18nManager.get(
-                        "playerInfo.wins",
-                        viewer
-                    )
-                }: ${acc.wins}${PluginVars.RESET}\n"
+                "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.wins", viewer)}: ${acc.wins}${PluginVars.RESET}\n"
             )
             append(
-                "${PluginVars.SECONDARY}${
-                    I18nManager.get(
-                        "playerInfo.lang",
-                        viewer
-                    )
-                }: ${acc.lang}${PluginVars.RESET}\n"
+                "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.lang", viewer)}: ${acc.lang}${PluginVars.RESET}\n"
+            )
+            append(
+                if (isCoreAdmin(target.uuid())) {
+                    "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.role", viewer)}: ${I18nManager.get("role.admin", viewer)}${PluginVars.RESET}\n"
+                } else {
+                    "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.role", viewer)}: ${I18nManager.get("role.normal", viewer)}${PluginVars.RESET}\n"
+                }
             )
         }
 
@@ -392,21 +384,28 @@ object PluginMenus {
                 )
                 return@MenuEntry
             }
-            VoteManager.createVote(
-                team = false,
-                p = viewer,
-                title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", viewer)}${PluginVars.RESET}",
-                desc = "${PluginVars.GRAY}${viewer.name}${
-                    I18nManager.get(
-                        "playerInfo.votekick.desc",
-                        viewer
-                    )
-                } ${target.name()}${PluginVars.RESET}",
-                excludePlayers = exclude
-            ) { ok ->
-                if (ok) {
-                    target.kick("")
-                    restorePlayerEditsWithinSeconds(target.uuid(), 200)
+            showConfirmMenu(viewer) {
+                VoteManager.createVote(
+                    isTeamVote =  false,
+                    creator = viewer,
+                    title = "${PluginVars.WARN}${
+                        I18nManager.get(
+                            "playerInfo.votekick.title",
+                            viewer
+                        )
+                    }${PluginVars.RESET}",
+                    desc = "${PluginVars.GRAY}${viewer.name}${
+                        I18nManager.get(
+                            "playerInfo.votekick.desc",
+                            viewer
+                        )
+                    } ${target.name()}${PluginVars.RESET}",
+                    excludePlayers = exclude
+                ) { ok ->
+                    if (ok) {
+                        target.kick("")
+                        restorePlayerEditsWithinSeconds(target.uuid(), 200)
+                    }
                 }
             }
         }
@@ -431,7 +430,12 @@ object PluginMenus {
                 if (seconds == null || seconds < 0) {
                     Call.announce(
                         viewer.con,
-                        "${PluginVars.WARN}${I18nManager.get("playerInfo.setban.invalid", viewer)}${PluginVars.RESET}"
+                        "${PluginVars.WARN}${
+                            I18nManager.get(
+                                "playerInfo.setban.invalid",
+                                viewer
+                            )
+                        }${PluginVars.RESET}"
                     )
                     return@createTextInput
                 }
@@ -440,9 +444,14 @@ object PluginMenus {
                 }
                 Call.announce(
                     viewer.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("playerInfo.setban.SUCCESS", viewer)}${PluginVars.RESET}"
+                    "${PluginVars.SUCCESS}${
+                        I18nManager.get(
+                            "playerInfo.setban.SUCCESS",
+                            viewer
+                        )
+                    }${PluginVars.RESET}"
                 )
-            }(viewer)
+            }
         }
 
         val rows = listOf(btnPm, btnVoteKick, btnBan)
@@ -488,32 +497,27 @@ object PluginMenus {
 
     private fun reloadWorld(map: mindustry.maps.Map) {
         try {
-            val descLower = map.description().lowercase()
-            val tags = TagUtil.getTags(descLower).map { it.lowercase() }
             val modeMap = mapOf(
                 "pvp" to Gamemode.pvp,
                 "survival" to Gamemode.survival,
                 "sandbox" to Gamemode.sandbox,
                 "attack" to Gamemode.attack
             )
-            val matched = modeMap.keys.filter { it in tags }
-            val modeKey = if (matched.size == 1) matched.first()
-            else {
-                val last = arc.Core.settings.get("lastServerMode", "sandbox")
-                if (last in modeMap) last else "sandbox"
-            }
-            val gamemode = modeMap[modeKey] ?: Gamemode.sandbox
+
+            val modeKey = arc.Core.settings.get("lastServerMode", "sandbox").toString().lowercase()
+            val gameMode = modeMap[modeKey] ?: Gamemode.sandbox
 
             val reloader = WorldReloader()
             reloader.begin()
             Vars.state.map = map
             Vars.world.loadMap(map)
-            Vars.state.rules = map.applyRules(gamemode)
+            Vars.state.rules = map.applyRules(gameMode)
             Vars.logic.play()
             reloader.end()
         } catch (_: Exception) {
         }
     }
+
 
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
         val isGameAdmin = PermissionManager.isGameAdmin(player)
@@ -521,17 +525,9 @@ object PluginMenus {
         val isOk = isGameAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
-
-        val descLower = map.description()
-        val tags = TagUtil.getTags(descLower)
-        val tagLine = tags.joinToString(" ") { "#$it" }
-
-        val pureDesc = map.description().replace(Regex("""\[[^]]*]"""), "").trim()
-
         val desc = buildString {
             append("\n${PluginVars.INFO}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
-            append("\n${PluginVars.INFO}${tagLine}${PluginVars.RESET}\n")
-            append("${PluginVars.GRAY}${pureDesc}${PluginVars.RESET}\n")
+            append("\n${PluginVars.GRAY}${map.description()}${PluginVars.RESET}\n")
         }
 
         val btnVote = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapInfo.vote", player)}${PluginVars.RESET}") {
@@ -542,24 +538,28 @@ object PluginMenus {
                     "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}"
                 )
             } else {
+                if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60) {
+                    Call.announce("${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
+                    return@MenuEntry
+                }
                 showConfirmMenu(player) {
-                VoteManager.createVote(
-                    team = false,
-                    p = player,
-                    title = "${PluginVars.INFO}${I18nManager.get("rtv.title", player)}${PluginVars.RESET}",
-                    desc = "${PluginVars.GRAY}${player.name} ${
-                        I18nManager.get(
-                            "rtv.desc",
-                            player
-                        )
-                    } ${map.name()}${PluginVars.RESET}"
-                ) { ok ->
-                    if (ok) {
-                        if (Vars.state.isGame) {
-                            reloadWorld(map)
+                    VoteManager.createVote(
+                        isTeamVote = false,
+                        creator = player,
+                        title = "${PluginVars.INFO}${I18nManager.get("rtv.title", player)}${PluginVars.RESET}",
+                        desc = "${PluginVars.GRAY}${player.name} ${
+                            I18nManager.get(
+                                "rtv.desc",
+                                player
+                            )
+                        } ${map.name()}${PluginVars.RESET}"
+                    ) { ok ->
+                        if (ok) {
+                            if (Vars.state.isGame) {
+                                reloadWorld(map)
+                            }
                         }
                     }
-                }
                 }
             }
         }
@@ -785,12 +785,6 @@ object PluginMenus {
 
 
     fun showMapInfoMenu(player: Player, map: mindustry.maps.Map) {
-        val descLower = map.description().lowercase()
-        val tags = TagUtil.getTags(descLower)
-        val tagLine = tags.joinToString(" ") { "#$it" }
-
-        val pureDesc = map.description().replace(Regex("""\[[^]]*]"""), "").trim()
-
         val desc = buildString {
             append(
                 "\n${PluginVars.WHITE}${(Vars.state.tick / 60f / 60f).toInt()} ${
@@ -802,15 +796,12 @@ object PluginMenus {
             )
             append("\n")
             append("${PluginVars.WHITE}${map.name()}${PluginVars.RESET}\n")
-            if (tags.isNotEmpty()) {
-                append("${PluginVars.INFO}$tagLine${PluginVars.RESET}\n")
-            }
             append("\n")
             if (!map.author().isNullOrBlank()) {
                 append("${PluginVars.SECONDARY}${map.author()}${PluginVars.RESET}\n")
             }
             append("\n")
-            append("${PluginVars.GRAY}$pureDesc${PluginVars.RESET}\n")
+            append("${PluginVars.GRAY}${map.description()}${PluginVars.RESET}\n")
         }
 
         MenusManage.createMenu<Unit>(
@@ -943,37 +934,37 @@ object PluginMenus {
         }
     }
     fun regNameInput(player: Player) {
-       val regName = MenusManage.createTextInput(
-        title = I18nManager.get("reg.title", player),
-        desc = I18nManager.get("reg.desc", player),
-        isNum = false,
-        placeholder = ""
-    ) { player, input ->
-        val name = input.trim()
-        val exists = DataManager.players.values().any { it.account == name }
-        if (exists) {
+        val regName = MenusManage.createTextInput(
+            title = I18nManager.get("reg.title", player),
+            desc = I18nManager.get("reg.desc", player),
+            isNum = false,
+            placeholder = ""
+        ) { player, input ->
+            val name = input.trim()
+            val exists = DataManager.players.values().any { it.account == name }
+            if (exists) {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.ERROR}${I18nManager.get("reg.name.duplicate", player)} ${PluginVars.RESET}"
+                )
+                return@createTextInput
+            }
             Call.announce(
                 player.con,
-                "${PluginVars.ERROR}${I18nManager.get("reg.name.duplicate", player)} ${PluginVars.RESET}"
+                "${PluginVars.SUCCESS}${I18nManager.get("reg.success", player)} $name${PluginVars.RESET}"
             )
-            return@createTextInput
+            DataManager.registerPlayer(
+                account = name,
+                password = "",
+                uuid = player.uuid(),
+                lang = player.locale()
+            )
+            if (Vars.state.rules.pvp) {
+                showTeamMenu(player)
+            }
         }
-        Call.announce(
-            player.con,
-            "${PluginVars.SUCCESS}${I18nManager.get("reg.success", player)} $name${PluginVars.RESET}"
-        )
-        DataManager.registerPlayer(
-            account = name,
-            password = "",
-            uuid = player.uuid(),
-            lang = player.locale()
-        )
-        if (Vars.state.rules.pvp) {
-            showTeamMenu(player)
-        }
-    }
         regName(player)
-       }
+    }
     fun logNameInput(player: Player) {
         val logName = MenusManage.createTextInput(
             title = I18nManager.get("login.title", null),
@@ -1088,16 +1079,16 @@ object PluginMenus {
                         return@createTextInput
                     }
                     val target = Groups.player.find { it.uuid() == uuid }
-                        restorePlayerEditsWithinSeconds(target.uuid(), seconds)
-                        Call.announce(
-                            player.con,
-                            "${PluginVars.SUCCESS}${
-                                I18nManager.get(
-                                    "revert.player_success",
-                                    player
-                                )
-                            } $name${PluginVars.RESET}"
-                        )
+                    restorePlayerEditsWithinSeconds(target.uuid(), seconds)
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${
+                            I18nManager.get(
+                                "revert.player_success",
+                                player
+                            )
+                        } $name${PluginVars.RESET}"
+                    )
                 }(player)
             })
         }
@@ -1171,8 +1162,8 @@ object PluginMenus {
     fun beginVotekick(viewer: Player, target: Player) {
         val exclude = listOf(viewer, target)
         VoteManager.createVote(
-            team = false,
-            p = viewer,
+            isTeamVote = false,
+            creator = viewer,
             title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", viewer)}${PluginVars.RESET}",
             desc = "${PluginVars.GRAY}${viewer.name} ${
                 I18nManager.get(

@@ -17,7 +17,8 @@ object PluginVars {
     const val WARN = "[#C8C8C8DD]"
     const val RESET = "[]"
 
-    const val ICON_PREV = "\uE800"
+    const val ICON_LEFT = "\uE802"
+    const val ICON_OK = "\uE800"
     const val ICON_CLOSE = "\uE815"
     const val ICON_NEXT = "\uE803"
 }

@@ -11,88 +11,68 @@ object VoteManager {
     private var globalVote: VoteSession? = null
     private val teamVotes = mutableMapOf<Int, VoteSession>()
 
-    fun getGlobalVoteSession(): VoteSession? = globalVote
+    val globalVoteSession: VoteSession? get() = globalVote
+    val globalVoteCreator: Player? get() = globalVote?.creator
+    val globalVoteExcluded: Set<String> get() = globalVote?.excluded ?: emptySet()
 
-    fun getGlobalVoteCreator(): Player? = globalVote?.creator
-    fun getGlobalVoteExcluded(): Set<String> = globalVote?.excluded ?: emptySet()
     fun clearVote() {
         globalVote = null
         teamVotes.clear()
     }
 
     fun createVote(
-        team: Boolean,
-        p: Player,
+        isTeamVote: Boolean,
+        creator: Player,
         title: String,
         desc: String,
         excludePlayers: List<Player>? = null,
         callback: (Boolean) -> Unit
     ) {
         if (Groups.player.count { PermissionManager.isNormal(it.uuid()) } <= 1) {
-            Call.announce(
-                p.con,
-                "${PluginVars.ERROR}${I18nManager.get("vote.notenough", p)}${PluginVars.RESET}"
-            )
-            return
-        }
-        val excludeUuids = excludePlayers?.map { it.uuid() }?.toSet() ?: emptySet()
-        val teamId = if (team) p.team().id else -1
-        if (!team && globalVote != null) {
-            Call.announce(
-                p.con,
-                "${PluginVars.WARN}${I18nManager.get("vote.globalbusy", p)}${PluginVars.RESET}"
-            )
-            return
-        }
-        if (team && teamVotes[teamId] != null) {
-            Call.announce(
-                p.con,
-                "${PluginVars.WARN}${I18nManager.get("vote.teambusy", p)}${PluginVars.RESET}"
-            )
+            Call.announce(creator.con, "${PluginVars.ERROR}${I18nManager.get("vote.notenough", creator)}${PluginVars.RESET}")
             return
         }
 
-        val voters = if (team) {
-            Groups.player.filter {
-                it.team().id == teamId && it != p &&
-                        it.uuid() !in excludeUuids &&
-                        PermissionManager.isNormal(it.uuid())
-            }
-        } else {
-            Groups.player.filter {
-                it != p &&
-                        it.uuid() !in excludeUuids &&
-                        PermissionManager.isNormal(it.uuid())
-            }
+        val excludeUuids = excludePlayers?.mapTo(HashSet()) { it.uuid() } ?: emptySet()
+        val teamId = if (isTeamVote) creator.team().id else -1
+
+        if (!isTeamVote && globalVote != null) {
+            Call.announce(creator.con, "${PluginVars.WARN}${I18nManager.get("vote.globalbusy", creator)}${PluginVars.RESET}")
+            return
+        }
+        if (isTeamVote && teamVotes[teamId] != null) {
+            Call.announce(creator.con, "${PluginVars.WARN}${I18nManager.get("vote.teambusy", creator)}${PluginVars.RESET}")
+            return
+        }
+
+        val voters = Groups.player.filter {
+            it != creator && PermissionManager.isNormal(it.uuid()) && it.uuid() !in excludeUuids && (!isTeamVote || it.team().id == teamId)
         }
 
         if (voters.isEmpty()) {
-            Call.announce(
-                p.con,
-                "${PluginVars.ERROR}${I18nManager.get("vote.novoters", p)}${PluginVars.RESET}"
-            )
+            Call.announce(creator.con, "${PluginVars.ERROR}${I18nManager.get("vote.novoters", creator)}${PluginVars.RESET}")
             return
         }
 
         val session = VoteSession(
-            team,
+            isTeamVote,
             teamId,
             voters.map { it.uuid() },
             mutableSetOf(),
             0,
             System.currentTimeMillis(),
-            p,
+            creator,
             callback,
             excludeUuids
         )
-        if (team) teamVotes[teamId] = session else globalVote = session
+        if (isTeamVote) teamVotes[teamId] = session else globalVote = session
 
         val voteMenu = MenusManage.createConfirmMenu(
             title = title,
             desc = desc,
             onResult = { player, choice ->
                 if (choice == 0) addVote(player.uuid())
-            },
+            }
         )
         voters.forEach { voteMenu(it) }
     }
@@ -105,45 +85,32 @@ object VoteManager {
     }
 
     fun endVotes() {
-        globalVote?.let { checkVote(it) }
-        teamVotes.values.toList().forEach { checkVote(it) }
+        globalVote?.let(::checkVote)
+        teamVotes.values.toList().forEach(::checkVote)
     }
 
     private fun checkVote(session: VoteSession) {
         val total = session.voters.size
-        val okCount = session.ok
         val timeout = PluginVars.MENU_CONFIRM_TIMEOUT_SEC * 1000
         val elapsed = System.currentTimeMillis() - session.startTime
         val allVoted = session.voted.size >= total
 
-        val passRatio = if (session.team) PluginVars.TEAM_RATIO else PluginVars.RATIO
-        val passCount =
-            if (session.voters.size <= 2) session.voters.size else ceil(passRatio * (session.voters.size + 1)).toInt()
+        val required = if (total <= 2) total else ceil((total + 1) * (if (session.team) PluginVars.TEAM_RATIO else PluginVars.RATIO)).toInt()
+        val passed = session.ok >= required || allVoted || elapsed > timeout
+        if (!passed) return
 
-        val done = okCount >= passCount || allVoted || elapsed > timeout
-        if (!done) return
+        val percent = if (total == 0) 0 else (session.ok * 100.0 / total).roundToInt()
 
-        val percent = if (total == 0) 0 else (okCount * 100.0 / total).roundToInt()
-        val creator = session.creator
-
-        if (okCount >= passCount) {
-            Groups.player.each { p ->
-                Call.announce(
-                    p.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("vote.success", p)}${PluginVars.RESET}"
-                )
+        if (session.ok >= required) {
+            Groups.player.each {
+                Call.announce(it.con, "${PluginVars.SUCCESS}${I18nManager.get("vote.success", it)}${PluginVars.RESET}")
             }
             session.callback(true)
         } else {
-            Groups.player.each { p ->
+            Groups.player.each {
                 Call.announce(
-                    p.con,
-                    "${PluginVars.WARN}${creator.name()}${
-                        I18nManager.get(
-                            "vote.failed",
-                            p
-                        )
-                    } ${I18nManager.get("vote.action", p)} ($percent%)${PluginVars.RESET}"
+                    it.con,
+                    "${PluginVars.WARN}${session.creator.name()}${I18nManager.get("vote.failed", it)} ${I18nManager.get("vote.action", it)} ($percent%)${PluginVars.RESET}"
                 )
             }
             session.callback(false)

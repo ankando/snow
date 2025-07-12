@@ -1,9 +1,7 @@
 package plugin.snow
 
-import arc.Core
 import arc.Events
 import mindustry.Vars
-import mindustry.content.UnitTypes
 import mindustry.game.EventType
 import mindustry.game.Gamemode
 import mindustry.game.Team
@@ -16,85 +14,46 @@ import plugin.snow.PluginMenus.showAuthMenu
 import kotlin.math.max
 
 object EventManager {
-    private fun applyfly() {
-        UnitTypes.risso.flying = true
-        UnitTypes.minke.flying = true
-        UnitTypes.bryde.flying = true
-        UnitTypes.sei.flying = true
-        UnitTypes.omura.flying = true
-        UnitTypes.retusa.flying = true
-        UnitTypes.oxynoe.flying = true
-        UnitTypes.cyerce.flying = true
-        UnitTypes.aegires.flying = true
-        UnitTypes.navanax.flying = true
-
-        UnitTypes.crawler.flying = true
-        UnitTypes.atrax.flying = true
-        UnitTypes.spiroct.flying = true
-    }
-
-    private fun applyUnfly() {
-        UnitTypes.risso.flying = false
-        UnitTypes.minke.flying = false
-        UnitTypes.bryde.flying = false
-        UnitTypes.sei.flying = false
-        UnitTypes.omura.flying = false
-        UnitTypes.retusa.flying = false
-        UnitTypes.oxynoe.flying = false
-        UnitTypes.cyerce.flying = false
-        UnitTypes.aegires.flying = false
-        UnitTypes.navanax.flying = false
-        UnitTypes.crawler.flying = false
-        UnitTypes.atrax.flying = false
-        UnitTypes.spiroct.flying = false
-    }
 
     private val usedMapNames = mutableSetOf<String>()
+
     fun init() {
         Events.on(EventType.PlayerJoin::class.java) { e ->
-            val player = e.player
-            val uuid = player.uuid()
-            val data = DataManager.getPlayerDataByUuid(uuid)
-            if (data == null) {
-                showAuthMenu(player)
-            }
+            val uuid = e.player.uuid()
+            if (DataManager.getPlayerDataByUuid(uuid) == null) showAuthMenu(e.player)
         }
 
         Events.on(EventType.PlayerLeave::class.java) { e ->
-            val player = e.player
-            if (VoteManager.getGlobalVoteCreator()?.uuid() == player.uuid()) {
-                VoteManager.clearVote()
-                return@on
+            val uuid = e.player.uuid()
+            if (VoteManager.globalVoteCreator?.uuid() == uuid) {
+                VoteManager.clearVote(); return@on
             }
-
-            val excluded = VoteManager.getGlobalVoteExcluded()
-            if (excluded.contains(player.uuid())) {
-                val acc = DataManager.getPlayerDataByUuid(player.uuid())
-                if (acc != null) {
-                    DataManager.updatePlayer(acc.id) { it.banUntil = System.currentTimeMillis() + 10 * 60 * 1000 }
+            if (VoteManager.globalVoteExcluded.contains(uuid)) {
+                DataManager.getPlayerDataByUuid(uuid)?.let {
+                    DataManager.updatePlayer(it.id) { acc ->
+                        acc.banUntil = System.currentTimeMillis() + 10 * 60 * 1000
+                    }
                 }
-                return@on
             }
         }
+
         Events.on(EventType.GameOverEvent::class.java) { e ->
+            val winner = e.winner ?: return@on
+            if (winner == Team.derelict || !Vars.state.teams.get(winner).hasCore()) return@on
+
             val cx = Vars.world.width() * Vars.tilesize / 2f
             val cy = Vars.world.height() * Vars.tilesize / 2f
             Call.sound(Sounds.explosionbig, cx, cy, 1f)
-            val winner = e.winner ?: return@on
-            val hasWinner = winner != Team.derelict && Vars.state.teams.get(winner).hasCore()
+
             val allTeams = PlayerTeamManager.all()
-            val teamSizes = allTeams.values.filter { it != Team.derelict }
-                .groupingBy { it }
-                .eachCount()
+            val teamSizes = allTeams.values.filter { it != Team.derelict }.groupingBy { it }.eachCount()
 
-            if (Vars.state.rules.mode() == Gamemode.pvp && hasWinner) {
-                val winnerOnlineCount = Groups.player.count { it.team() == winner }
-                val winScore = max(25, 40 - max(1, winnerOnlineCount) * 4)
-
+            if (Vars.state.rules.mode() == Gamemode.pvp) {
+                val winScore = max(25, 40 - max(1, Groups.player.count { it.team() == winner }) * 4)
                 for ((uuid, team) in allTeams) {
                     if (team == Team.derelict) continue
-                    val player = Groups.player.find { it.uuid() == uuid }
                     val acc = DataManager.getPlayerDataByUuid(uuid) ?: continue
+                    val player = Groups.player.find { it.uuid() == uuid }
 
                     if (team == winner) {
                         DataManager.updatePlayer(acc.id) {
@@ -102,119 +61,60 @@ object EventManager {
                             it.wins++
                         }
                         player?.let {
-                            Call.announce(
-                                it.con,
-                                "${PluginVars.SUCCESS}${
-                                    I18nManager.get(
-                                        "game.victory",
-                                        it
-                                    )
-                                } +${winScore}${PluginVars.RESET}"
-                            )
+                            Call.announce(it.con, "${PluginVars.SUCCESS}${I18nManager.get("game.victory", it)} +$winScore${PluginVars.RESET}")
                         }
                     } else {
-                        val size = teamSizes.getOrDefault(team, 1)
-                        val penalty = max(20, 50 - size * 3)
+                        val penalty = max(20, 50 - teamSizes.getOrDefault(team, 1) * 3)
                         DataManager.updatePlayer(acc.id) {
                             it.score = max(0, it.score - penalty)
                         }
                         player?.let {
-                            Call.announce(
-                                it.con,
-                                "${PluginVars.ERROR}${
-                                    I18nManager.get(
-                                        "game.defeat",
-                                        it
-                                    )
-                                } -${penalty}${PluginVars.RESET}"
-                            )
+                            Call.announce(it.con, "${PluginVars.ERROR}${I18nManager.get("game.defeat", it)} -$penalty${PluginVars.RESET}")
                         }
                     }
                 }
-            } else if (hasWinner) {
+            } else {
                 val winners = Groups.player.copy().select { it.team() == winner }
-                val total = winners.size
-                val score = max(25, 40 - total * 4)
-
+                val score = max(25, 40 - winners.size * 4)
                 winners.each { p ->
                     val acc = DataManager.getPlayerDataByUuid(p.uuid()) ?: return@each
                     DataManager.updatePlayer(acc.id) {
                         it.score += score
                         it.wins++
                     }
-                    Call.announce(
-                        p.con,
-                        "${PluginVars.SUCCESS}${I18nManager.get("game.victory", p)} +${score}${PluginVars.RESET}"
-                    )
+                    Call.announce(p.con, "${PluginVars.SUCCESS}${I18nManager.get("game.victory", p)} +$score${PluginVars.RESET}")
                 }
             }
         }
 
-        Events.on(EventType.BlockDestroyEvent::class.java) { event ->
-            val team = event.tile.team()
-            if (event.tile.block() is CoreBlock) {
-                if (team !== Team.derelict && team.cores().size <= 1) {
-                    team.data().players.each { p ->
-                        val msg = if (Vars.state.rules.mode() == Gamemode.pvp)
-                            "${PluginVars.ERROR}${I18nManager.get("core.lost.team", p)}${PluginVars.RESET}"
-                        else
-                            "${PluginVars.WARN}${I18nManager.get("core.lost.single", p)}${PluginVars.RESET}"
-                        p?.let { Call.announce(it.con, msg) }
-                    }
+        Events.on(EventType.BlockDestroyEvent::class.java) { e ->
+            val team = e.tile.team()
+            if (e.tile.block() is CoreBlock && team != Team.derelict && team.cores().size <= 1) {
+                team.data().players.each { p ->
+                    val msgKey = if (Vars.state.rules.mode() == Gamemode.pvp) "core.lost.team" else "core.lost.single"
+                    Call.announce(p.con, "${PluginVars.ERROR}${I18nManager.get(msgKey, p)}${PluginVars.RESET}")
                 }
             }
         }
 
-        Events.on(EventType.PlayEvent::class.java) {
+        Events.on(EventType.ResetEvent::class.java) {
             PlayerTeamManager.clear()
             RevertBuild.clearAll()
             VoteManager.clearVote()
+        }
 
-            val map = Vars.state.map
-            val desc = map.description().lowercase()
-            val tags = TagUtil.getTags(desc).map { it.lowercase() }
-            val modeMap = mapOf(
-                "pvp" to Gamemode.pvp,
-                "survival" to Gamemode.survival,
-                "sandbox" to Gamemode.sandbox,
-                "attack" to Gamemode.attack
-            )
-            val matched = modeMap.keys.filter { key -> tags.any { it == key } }
-            val modeKey = if (matched.size == 1) matched.first()
-            else {
-                val saved = Core.settings.get("lastServerMode", "sandbox")
-                if (saved in modeMap) saved else "sandbox"
-            }
-            val gamemode = modeMap[modeKey] ?: Gamemode.sandbox
+        Events.on(EventType.PlayEvent::class.java) {
+            val currentMap = Vars.state.map
+            val name = currentMap.file.name()
+            usedMapNames += name
 
-            Vars.state.rules = map.applyRules(gamemode)
+            val pool = Vars.maps.customMaps().filter { it.file.name() !in usedMapNames && it != currentMap }
 
-            if (tags.contains("fly")) {
-                applyfly()
-            } else applyUnfly()
-
-            Vars.state.rules.pvpAutoPause = false
-            Vars.state.rules.hideBannedBlocks = true
-
-            val currentMapName = map.file.name()
-            if (!usedMapNames.contains(currentMapName)) usedMapNames.add(currentMapName)
-
-            val candidates = Vars.maps.customMaps().select { m ->
-                val d = m?.description()?.lowercase() ?: ""
-                val mtags = TagUtil.getTags(d).map { it.lowercase() }
-                modeMap.keys.none { key -> mtags.any { it == key } }
-            }
-            val pool = candidates.filter { m ->
-                val name = m.file.name()
-                name !in usedMapNames && m != Vars.state.map
-            }
             if (pool.isEmpty()) {
                 usedMapNames.clear()
-                usedMapNames.add(currentMapName)
+                usedMapNames += name
                 Vars.maps.setNextMapOverride(null)
-            } else {
-                Vars.maps.setNextMapOverride(pool.random())
-            }
+            } else Vars.maps.setNextMapOverride(pool.random())
         }
     }
 }

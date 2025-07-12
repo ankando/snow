@@ -174,7 +174,7 @@ object ClientCommands {
                 return@register
             }
             if (Vars.state.rules.pvp && team != null) {
-                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("logout.inPvP", player)}${PluginVars.RESET}")
+                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("inPvP", player)}${PluginVars.RESET}")
                 return@register
             }
             showConfirmMenu(player) {
@@ -209,8 +209,8 @@ object ClientCommands {
             }
             showConfirmMenu(player) {
                 VoteManager.createVote(
-                    team = true,
-                    p = player,
+                    isTeamVote = true,
+                    creator = player,
                     title = "${PluginVars.WARN}${I18nManager.get("surrender.vote.title", player)}${PluginVars.RESET}",
                     desc = "${PluginVars.GRAY}${I18nManager.get("surrender.vote.desc", player)}${PluginVars.RESET}",
                 ) { ok ->
