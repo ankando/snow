@@ -4,14 +4,14 @@ import mindustry.gen.Player
 import plugin.core.DataManager.getPlayerDataByUuid
 
 object I18nManager {
-    private val langs = mutableMapOf<String, Map<String, String>>()
+    private val languages = mutableMapOf<String, Map<String, String>>()
     private var default: Map<String, String> = emptyMap()
-    private val supportedLangs = setOf("en", "ru", "ja", "ko", "zh_CN")
+    private val supportedLanguages = setOf("en", "ru", "ja", "ko", "zh")
 
     fun init() {
-        supportedLangs.forEach { lang ->
+        supportedLanguages.forEach { lang ->
             val fileName = if (lang == "en") "bundle.properties" else "bundle_${lang}.properties"
-            langs[lang] = loadBundle(fileName).also {
+            languages[lang] = loadBundle(fileName).also {
                 if (lang == "en") default = it
             }
         }
@@ -32,7 +32,7 @@ object I18nManager {
 
     fun get(key: String, player: Player?, resolveEscape: Boolean = true): String {
         val langCode = resolveLangCode(player)
-        val value = langs[langCode]?.get(key)
+        val value = languages[langCode]?.get(key)
             ?: default[key]
             ?: key
 
@@ -44,7 +44,8 @@ object I18nManager {
             ?: player?.locale()
             ?: "en"
 
-        val code = rawLang.replace('-', '_')
-        return if (code in supportedLangs) code else "en"
+        val code = rawLang.replace('-', '_').split('_')[0]
+        return if (code in supportedLanguages) code else "en"
     }
 }
+

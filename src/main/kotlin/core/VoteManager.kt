@@ -4,6 +4,7 @@ import mindustry.Vars
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
+import plugin.core.PermissionManager.isNormal
 import plugin.snow.PluginVars
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -29,8 +30,8 @@ object VoteManager {
         excludePlayers: List<Player>? = null,
         callback: (Boolean) -> Unit
     ) {
-        if (!Vars.state.isGame) return
-        if (Groups.player.count { PermissionManager.isNormal(it.uuid()) } <= 1) {
+        if (!Vars.state.isGame || !isNormal(creator.uuid())) return
+        if (Groups.player.count { isNormal(it.uuid()) } <= 1) {
             Call.announce(creator.con, "${PluginVars.ERROR}${I18nManager.get("vote.notenough", creator)}${PluginVars.RESET}")
             return
         }
@@ -48,7 +49,7 @@ object VoteManager {
         }
 
         val voters = Groups.player.filter {
-            it != creator && PermissionManager.isNormal(it.uuid()) && it.uuid() !in excludeUuids && (!isTeamVote || it.team().id == teamId)
+            it != creator && isNormal(it.uuid()) && it.uuid() !in excludeUuids && (!isTeamVote || it.team().id == teamId)
         }
 
         if (voters.isEmpty()) {

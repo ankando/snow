@@ -8,9 +8,7 @@ import plugin.snow.PluginVars
 enum class PermissionLevel {
     BANNED,
     NORMAL,
-    MEMBER,
     CORE_ADMIN,
-    GAME_ADMIN
 }
 
 object PermissionManager {
@@ -28,13 +26,6 @@ object PermissionManager {
         return DataManager.getPlayerDataByUuid(uuid)
             ?.uuids
             ?.any { Vars.netServer.admins.getInfo(it)?.admin == true } == true
-    }
-
-    fun isGameAdmin(player: Player): Boolean {
-        val uuid = player.uuid()
-        fixAdminStatus(uuid, player)
-        val data = DataManager.getPlayerDataByUuid(uuid) ?: return false
-        return isCoreAdmin(uuid) && data.isAdmin && player.admin
     }
 
     fun fixAdminStatus(uuid: String, player: Player) {
@@ -69,16 +60,14 @@ object PermissionManager {
     }
 
     fun getLevel(uuid: String, player: Player? = null): PermissionLevel {
+        if (DataManager.getPlayerDataByUuid(uuid) == null) return PermissionLevel.NORMAL
         if (isBanned(uuid)) return PermissionLevel.BANNED
-        val data = DataManager.getPlayerDataByUuid(uuid) ?: return PermissionLevel.NORMAL
         val isCoreAdmin = isCoreAdmin(uuid)
 
         if (player != null) fixAdminStatus(uuid, player)
 
         return when {
-            isCoreAdmin && data.isAdmin && player?.admin == true -> PermissionLevel.GAME_ADMIN
             isCoreAdmin -> PermissionLevel.CORE_ADMIN
-            data.score > 20 -> PermissionLevel.MEMBER
             else -> PermissionLevel.NORMAL
         }
     }

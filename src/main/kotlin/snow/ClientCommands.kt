@@ -17,6 +17,7 @@ import plugin.snow.PluginMenus.showConfirmMenu
 import plugin.snow.PluginMenus.showVoteKickPlayerMenu
 
 object ClientCommands {
+
     fun register(handler: CommandHandler) {
         fun parsePageArg(args: Array<String>): Int {
             if (args.isNotEmpty()) {
@@ -52,8 +53,8 @@ object ClientCommands {
             PluginMenus.showMapMenu(player, page)
         }
         register("rank", "[page]", "helpCmd.rank") { args, player ->
-            val page = parsePageArg(args)
-            PluginMenus.showRankMenu(player, page)
+            parsePageArg(args)
+            PluginMenus.showRankMenu(player)
         }
         register("players", "", "helpCmd.players") { args, player ->
             PluginMenus.showPlayersMenu(player, 1)
@@ -65,13 +66,13 @@ object ClientCommands {
             }
             PluginMenus.showTeamMenu(player)
         }
-        register("rules", "", "helpCmd.rules", PermissionLevel.MEMBER) { _, player ->
+        register("rules", "", "helpCmd.rules", PermissionLevel.NORMAL) { _, player ->
             PluginMenus.showRulesMenu(player)
         }
         register("info", "", "helpCmd.info") { _, player ->
             PluginMenus.showMapInfoMenu(player, Vars.state.map)
         }
-        register("upload", "", "helpCmd.upload", PermissionLevel.MEMBER) { _, player ->
+        register("upload", "", "helpCmd.upload", PermissionLevel.NORMAL) { _, player ->
             PluginMenus.showUploadMapMenu(player)
         }
         register("revert", "", "helpCmd.revert", PermissionLevel.CORE_ADMIN) { _, player ->
@@ -90,7 +91,7 @@ object ClientCommands {
                 netServer.sendWorldData(player)
             }
         }
-        register("votekick", "[player] [reason]", "helpCmd.votekick", PermissionLevel.MEMBER) { args, player ->
+        register("votekick", "[player] [reason]", "helpCmd.votekick", PermissionLevel.NORMAL) { args, player ->
             if (Groups.player.size() < 3) {
                 Call.announce(
                     player.con,
@@ -197,7 +198,7 @@ object ClientCommands {
                 }
             }
         }
-        register("surrender", "", "helpCmd.surrender", PermissionLevel.MEMBER) { _, player ->
+        register("surrender", "", "helpCmd.surrender", PermissionLevel.NORMAL) { _, player ->
             val team = player.team()
             val teamPlayerCount = Groups.player.count { it.team() == team && !it.dead() }
             if (team == Team.derelict || !team.data().hasCore() || teamPlayerCount < 3) {

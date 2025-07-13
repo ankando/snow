@@ -1,8 +1,9 @@
 package plugin.snow
 
 import arc.Events
+import arc.util.Interval
 import mindustry.Vars
-import mindustry.game.EventType
+import mindustry.game.EventType.*
 import mindustry.game.Gamemode
 import mindustry.game.Team
 import mindustry.gen.Call
@@ -15,105 +16,119 @@ import kotlin.math.max
 
 object EventManager {
 
-    private val usedMapNames = mutableSetOf<String>()
+    private val tick10s = Interval()
+    private val usedMaps = mutableSetOf<String>()
+    private val modeTags = mapOf(
+        "pvp" to Gamemode.pvp,
+        "survival" to Gamemode.survival,
+        "sandbox" to Gamemode.sandbox,
+        "attack" to Gamemode.attack
+    )
+    private val validModeKeys = modeTags.keys
 
     fun init() {
-        Events.on(EventType.PlayerJoin::class.java) { e ->
-            val uuid = e.player.uuid()
-            if (DataManager.getPlayerDataByUuid(uuid) == null) showAuthMenu(e.player)
+
+        Events.run(Trigger.update) {
+            if (Vars.state.isGame && tick10s.get(600f)) {
+                VoteManager.endVotes()
+                if (DataManager.needSave) DataManager.saveAll()
+            }
         }
 
-        Events.on(EventType.PlayerLeave::class.java) { e ->
+        Events.on(PlayerJoin::class.java) { e ->
+            DataManager.getPlayerDataByUuid(e.player.uuid()) ?: showAuthMenu(e.player)
+        }
+
+        Events.on(PlayerLeave::class.java) { e ->
             val uuid = e.player.uuid()
-            if (VoteManager.globalVoteCreator?.uuid() == uuid) {
-                VoteManager.clearVote(); return@on
-            }
-            if (VoteManager.globalVoteExcluded.contains(uuid)) {
-                DataManager.getPlayerDataByUuid(uuid)?.let {
-                    DataManager.updatePlayer(it.id) { acc ->
-                        acc.banUntil = System.currentTimeMillis() + 10 * 60 * 1000
-                    }
+            when (uuid) {
+                VoteManager.globalVoteCreator?.uuid() -> VoteManager.clearVote()
+                in VoteManager.globalVoteExcluded -> DataManager.getPlayerDataByUuid(uuid)?.let { acc ->
+                    DataManager.updatePlayer(acc.id) { it.banUntil = System.currentTimeMillis() + 600_000 }
                 }
             }
         }
 
-        Events.on(EventType.GameOverEvent::class.java) { e ->
+        Events.on(GameOverEvent::class.java) { e ->
             val winner = e.winner ?: return@on
-            if (winner == Team.derelict || !Vars.state.teams.get(winner).hasCore()) return@on
+            if (winner == Team.derelict || winner.cores().isEmpty) return@on
+            Call.sound(Sounds.explosionbig, Vars.world.unitWidth() / 2f, Vars.world.unitHeight() / 2f, 1f)
 
-            val cx = Vars.world.width() * Vars.tilesize / 2f
-            val cy = Vars.world.height() * Vars.tilesize / 2f
-            Call.sound(Sounds.explosionbig, cx, cy, 1f)
-            val allTeams = PlayerTeamManager.all()
-            val teamSizes = allTeams.values.filter { it != Team.derelict }.groupingBy { it }.eachCount()
-
-            if (Vars.state.rules.mode() == Gamemode.pvp) {
-                val winScore = max(25, 40 - max(1, Groups.player.count { it.team() == winner }) * 4)
-                for ((uuid, team) in allTeams) {
-                    if (team == Team.derelict) continue
-                    val acc = DataManager.getPlayerDataByUuid(uuid) ?: continue
-                    val player = Groups.player.find { it.uuid() == uuid }
-
-                    if (team == winner) {
-                        DataManager.updatePlayer(acc.id) {
-                            it.score += winScore
-                            it.wins++
-                        }
-                        player?.let {
-                            Call.announce(it.con, "${PluginVars.SUCCESS}${I18nManager.get("game.victory", it)} +$winScore${PluginVars.RESET}")
-                        }
-                    } else {
-                        val penalty = max(20, 50 - teamSizes.getOrDefault(team, 1) * 3)
-                        DataManager.updatePlayer(acc.id) {
-                            it.score = max(0, it.score - penalty)
-                        }
-                        player?.let {
-                            Call.announce(it.con, "${PluginVars.ERROR}${I18nManager.get("game.defeat", it)} -$penalty${PluginVars.RESET}")
-                        }
-                    }
-                }
-            } else {
-                val winners = Groups.player.copy().select { it.team() == winner }
-                val score = max(25, 40 - winners.size * 4)
-                winners.each { p ->
-                    val acc = DataManager.getPlayerDataByUuid(p.uuid()) ?: return@each
-                    DataManager.updatePlayer(acc.id) {
-                        it.score += score
-                        it.wins++
-                    }
-                    Call.announce(p.con, "${PluginVars.SUCCESS}${I18nManager.get("game.victory", p)} +$score${PluginVars.RESET}")
-                }
+            when (Vars.state.rules.mode()) {
+                Gamemode.pvp -> handlePvpGameOver(winner)
+                else         -> handleCoopGameOver(winner)
             }
         }
 
-        Events.on(EventType.BlockDestroyEvent::class.java) { e ->
+        Events.on(BlockDestroyEvent::class.java) { e ->
             val team = e.tile.team()
             if (e.tile.block() is CoreBlock && team != Team.derelict && team.cores().size <= 1) {
+                val key = if (Vars.state.rules.mode() == Gamemode.pvp) "core.lost.team" else "core.lost.single"
                 team.data().players.each { p ->
-                    val msgKey = if (Vars.state.rules.mode() == Gamemode.pvp) "core.lost.team" else "core.lost.single"
-                    Call.announce(p.con, "${PluginVars.ERROR}${I18nManager.get(msgKey, p)}${PluginVars.RESET}")
+                    Call.announce(p.con, "${PluginVars.ERROR}${I18nManager.get(key, p)}${PluginVars.RESET}")
                 }
             }
         }
 
-        Events.on(EventType.ResetEvent::class.java) {
+        Events.on(ResetEvent::class.java) {
             PlayerTeamManager.clear()
             RevertBuild.clearAll()
             VoteManager.clearVote()
+            usedMaps.clear()
         }
 
-        Events.on(EventType.PlayEvent::class.java) {
-            val currentMap = Vars.state.map
-            val name = currentMap.file.name()
-            usedMapNames += name
+        Events.on(PlayEvent::class.java) {
+            val map = Vars.state.map
+            parseModeTag(map.description())?.let { Vars.state.rules = map.applyRules(it) }
 
-            val pool = Vars.maps.customMaps().filter { it.file.name() !in usedMapNames && it != currentMap }
-
-            if (pool.isEmpty()) {
-                usedMapNames.clear()
-                usedMapNames += name
-                Vars.maps.setNextMapOverride(null)
-            } else Vars.maps.setNextMapOverride(pool.random())
+            val currentName = map.file.name()
+            usedMaps += currentName
+            val pool = Vars.maps.customMaps().filter { it.file.name() !in usedMaps && it != map }
+            Vars.maps.setNextMapOverride(pool.randomOrNull())
+            if (pool.isEmpty()) usedMaps.clear().also { usedMaps += currentName }
         }
+    }
+
+    private fun handlePvpGameOver(winner: Team) {
+        val teamCounts = PlayerTeamManager.all().values
+            .filter { it != Team.derelict }
+            .groupingBy { it }
+            .eachCount()
+
+        val winScore = max(25, 40 - max(1, Groups.player.count { it.team() == winner }) * 4)
+
+        PlayerTeamManager.all().forEach { (uuid, team) ->
+            if (team == Team.derelict) return@forEach
+            val acc = DataManager.getPlayerDataByUuid(uuid) ?: return@forEach
+            val pl = Groups.player.find { it.uuid() == uuid }
+
+            if (team == winner) {
+                DataManager.updatePlayer(acc.id) { it.score += winScore; it.wins++ }
+                pl?.let { Call.announce(it.con, "${PluginVars.SUCCESS}${I18nManager.get("game.victory", it)} +$winScore${PluginVars.RESET}") }
+            } else {
+                val penalty = max(20, 50 - teamCounts.getValue(team) * 3)
+                DataManager.updatePlayer(acc.id) { it.score = max(0, it.score - penalty) }
+                pl?.let { Call.announce(it.con, "${PluginVars.ERROR}${I18nManager.get("game.defeat", it)} -$penalty${PluginVars.RESET}") }
+            }
+        }
+    }
+
+    private fun handleCoopGameOver(winner: Team) {
+        val winners = Groups.player.copy().filter { it.team() == winner }
+        val score = max(25, 40 - winners.size * 4)
+        winners.forEach { p ->
+            DataManager.getPlayerDataByUuid(p.uuid())?.let { acc ->
+                DataManager.updatePlayer(acc.id) { it.score += score; it.wins++ }
+            }
+            Call.announce(p.con, "${PluginVars.SUCCESS}${I18nManager.get("game.victory", p)} +$score${PluginVars.RESET}")
+        }
+    }
+
+    private fun parseModeTag(desc: String): Gamemode? {
+        val tags = Regex("""\[@([a-z0-9_-]+)]""").findAll(desc.lowercase())
+            .map { it.groupValues[1] }
+            .toList()
+        val tag = tags.singleOrNull { it in validModeKeys } ?: return null
+        return modeTags[tag]
     }
 }

@@ -18,6 +18,7 @@ dependencies {
     compileOnly("com.github.Anuken.Arc:arc-core:v149")
     compileOnly("com.github.Anuken.Mindustry:core:v149")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation("com.maxmind.geoip2:geoip2:4.3.0")
 }
 
 kotlin {
@@ -56,7 +57,7 @@ fun File.writeUtf8Lines(lines: List<String>) {
     }
 }
 
-val supportedLangs = listOf("en", "ru", "ja", "ko", "zh_CN")
+val supportedLangs = listOf("en", "ru", "ja", "ko", "zh")
 
 val syncI18nBundles by tasks.registering {
     group = "build"

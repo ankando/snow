@@ -110,7 +110,7 @@ object PluginMenus {
             blocksIndex -> showBlocksMenu(player)
             unitsIndex -> showUnitsMenu(player)
             in 0 until allRules.size -> {
-                verifyPermissionLevel(player, PermissionLevel.GAME_ADMIN) {
+                verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
                     val rule = allRules[choice]
                     if (editableBooleanRules.contains(rule)) {
                         val cur = getRuleValue(rule) as? Boolean ?: return@verifyPermissionLevel
@@ -167,7 +167,7 @@ object PluginMenus {
         when (choice) {
             closeIndex -> Call.hideFollowUpMenu(player.con, blockMenuId)
             in 0 until blocks.size -> {
-                verifyPermissionLevel(player, PermissionLevel.GAME_ADMIN) {
+                verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
                     val block = blocks[choice]
                     if (bannedBlocks.contains(block)) bannedBlocks.remove(block) else bannedBlocks.add(block)
                     Call.setRules(Vars.state.rules)
@@ -185,7 +185,7 @@ object PluginMenus {
         when (choice) {
             closeIndex -> Call.hideFollowUpMenu(player.con, unitMenuId)
             in 0 until units.size -> {
-                verifyPermissionLevel(player, PermissionLevel.GAME_ADMIN) {
+                verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
                     val unit = units[choice]
                     val bannedUnits = Vars.state.rules.bannedUnits
                     if (bannedUnits.contains(unit)) bannedUnits.remove(unit) else bannedUnits.add(unit)
@@ -269,25 +269,21 @@ object PluginMenus {
         show(player, page)
     }
 
-    fun showRankMenu(player: Player, page: Int = 1) {
+    fun showRankMenu(player: Player) {
         val rankMenu = MenusManage.createMenu<Unit>(
-            title = { player, page, total, _ ->
+            title = { player, _, _, _ ->
                 "${PluginVars.GRAY}${
-                    I18nManager.get(
-                        "rank.title",
-                        player
-                    )
-                } $page/$total${PluginVars.RESET}"
+                    I18nManager.get("rank.title", player)
+                }${PluginVars.RESET}"
             },
-            perPage = 40,
-            desc = { player, page, _ ->
+            perPage = 50,
+            desc = { player, _, _ ->
                 val ranked = DataManager.players.values().filter { it.score > 0 }
                     .sortedByDescending { it.score }
                 val myAcc = ranked.find { it.uuids.any { uuid -> uuid == player.uuid() } }
                 val myScore = myAcc?.score ?: 0
                 val myRank = if (myAcc != null) ranked.indexOfFirst { it.id == myAcc.id } + 1 else 0
-                val start = (page - 1) * 40
-                val end = minOf(start + 40, ranked.size)
+
                 buildString {
                     if (myScore > 0) {
                         append(
@@ -301,17 +297,18 @@ object PluginMenus {
                     } else {
                         append("\n${PluginVars.INFO}${I18nManager.get("rank.nopoints", player)}${PluginVars.RESET}\n\n")
                     }
-                    for (i in start until end) {
-                        val acc = ranked[i]
+                    ranked.take(50).forEachIndexed { i, acc ->
                         val nick = acc.account.ifBlank { I18nManager.get("rank.unknown", player) }
                         append("${PluginVars.INFO}${i + 1}. $nick: ${acc.score}${PluginVars.RESET}\n")
                     }
                 }
             },
+            paged = false,
             options = { _, _, _ -> emptyList() }
         )
-        rankMenu(player, page)
+        rankMenu(player, 1)
     }
+
 
     fun showPlayersMenu(player: Player, page: Int = 1) {
         val playersMenu = MenusManage.createMenu<Unit>(
@@ -385,28 +382,7 @@ object PluginMenus {
                 return@MenuEntry
             }
             showConfirmMenu(viewer) {
-                VoteManager.createVote(
-                    isTeamVote =  false,
-                    creator = viewer,
-                    title = "${PluginVars.WARN}${
-                        I18nManager.get(
-                            "playerInfo.votekick.title",
-                            viewer
-                        )
-                    }${PluginVars.RESET}",
-                    desc = "${PluginVars.GRAY}${viewer.name} ${
-                        I18nManager.get(
-                            "playerInfo.votekick.desc",
-                            viewer
-                        )
-                    } ${target.name()}${PluginVars.RESET}",
-                    excludePlayers = exclude
-                ) { ok ->
-                    if (ok) {
-                        target.kick("")
-                        restorePlayerEditsWithinSeconds(target.uuid(), 200)
-                    }
-                }
+                beginVotekick(viewer, target)
             }
         }
 
@@ -505,9 +481,9 @@ object PluginMenus {
 
 
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
-        val isGameAdmin = PermissionManager.isGameAdmin(player)
+        val isAdmin = isCoreAdmin(player.uuid())
         val normalCount = Groups.player.count { PermissionManager.isNormal(it.uuid()) }
-        val isOk = isGameAdmin || normalCount < 2
+        val isOk = isAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
         val desc = buildString {
@@ -1000,16 +976,16 @@ object PluginMenus {
         val title = "${PluginVars.GRAY}${I18nManager.get("auth.title", player)}${PluginVars.RESET}"
         val desc = ""
         val buttons = arrayOf(
-            arrayOf("${PluginVars.WHITE}${I18nManager.get("auth.login", player)}${PluginVars.RESET}"),
-            arrayOf("${PluginVars.WHITE}${I18nManager.get("auth.register", player)}${PluginVars.RESET}")
+            arrayOf("${PluginVars.WHITE}${I18nManager.get("auth.register", player)}${PluginVars.RESET}"),
+            arrayOf("${PluginVars.WHITE}${I18nManager.get("auth.login", player)}${PluginVars.RESET}")
         )
 
 
         val menuId = Menus.registerMenu { p, choice ->
             if (p == null) return@registerMenu
             when (choice) {
-                0 -> logNameInput(p)
-                1 -> regNameInput(p)
+                0 -> regNameInput(p)
+                1 -> logNameInput(p)
                 else -> {}
             }
         }
@@ -1164,6 +1140,7 @@ object PluginMenus {
             }
         }
     }
+
     fun showConfirmMenu(player: Player, onConfirm: (Player) -> Unit) {
         val title = I18nManager.get("confirm.title", player)
         val desc = I18nManager.get("confirm.desc", player)
