@@ -508,7 +508,7 @@ object PluginMenus {
                         isTeamVote = false,
                         creator = player,
                         title = "${PluginVars.INFO}${I18nManager.get("rtv.title", player)}${PluginVars.RESET}",
-                        desc = "${PluginVars.GRAY}${player.name} ${
+                        desc = "\uE827 ${PluginVars.GRAY}${player.name} ${
                             I18nManager.get(
                                 "rtv.desc",
                                 player
@@ -1121,7 +1121,7 @@ object PluginMenus {
             isTeamVote = false,
             creator = viewer,
             title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", viewer)}${PluginVars.RESET}",
-            desc = "${PluginVars.GRAY}${viewer.name} ${
+            desc = "\uE817 ${PluginVars.GRAY}${viewer.name} ${
                 I18nManager.get(
                     "playerInfo.votekick.desc",
                     viewer
