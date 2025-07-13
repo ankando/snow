@@ -9,7 +9,7 @@
   <component name="ChangeListManager">
     <list default="true" id="ce39ab6a-a286-4522-918b-e2a246d6ac40" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/kotlin/snow/PluginMenus.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/snow/PluginMenus.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/kotlin/snow/NetEvents.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/snow/NetEvents.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

@@ -39,7 +39,8 @@ object NetEvents {
 
     private fun broadcast(sender: Player, raw: String) {
         val plain = Strings.stripColors(raw)
-        val local = "${PluginVars.GRAY}$plain${PluginVars.RESET}"
+        val prefix = "${PluginVars.INFO}${sender.name()}${PluginVars.RESET}"
+        val local = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
         sender.sendMessage(local)
 
         Groups.player.each { r ->
@@ -47,7 +48,7 @@ object NetEvents {
             val lang = DataManager.getPlayerDataByUuid(r.uuid())?.lang ?: r.locale()
             Translator.translate(plain, "auto", lang, { tr ->
                 val body = if (tr != plain) "$plain ${PluginVars.SECONDARY}($tr)${PluginVars.RESET}" else plain
-                r.sendMessage("$local: $body")
+                r.sendMessage("$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}")
             }, { r.sendMessage(local) })
         }
     }
@@ -65,7 +66,7 @@ object NetEvents {
         val adminName = admin.name()
         val targetName = target.name()
 
-        fun restore() = RevertBuild.restorePlayerEditsWithinSeconds(uuid, 300)
+        fun restore() = RevertBuild.restorePlayerEditsWithinSeconds(uuid, 200)
 
         when (pkt.action) {
             AdminAction.kick -> {
