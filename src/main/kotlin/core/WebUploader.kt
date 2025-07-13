@@ -52,7 +52,7 @@ object WebUploader {
             return when (session.method) {
                 Method.GET -> handleGet(session, uuid, isAdmin, token)
                 Method.POST -> handlePost(session, uuid, isAdmin)
-                else -> newFixedLengthResponse("Unsupport")
+                else -> newFixedLengthResponse("Unsupported")
             }
         }
 
@@ -70,18 +70,30 @@ object WebUploader {
             s.parseBody(files)
             val name = s.parameters["file"]?.firstOrNull() ?: return bad("no file")
             val safe = Fi(name).name()
+
             if (!safe.endsWith(".msav") || !safe.matches("^[A-Za-z0-9_-]{1,30}\\.msav$".toRegex()))
                 return bad("bad name")
+
             val upload = Fi(files["file"])
             if (upload.length() > 80 * 1024) return bad("too big")
+
             val dst = mapDir.child(safe)
             val uploaderId = DataManager.getIdByUuid(uuid) ?: -1
             val mapData = DataManager.maps[safe]
-            if (dst.exists() && mapData?.uploaderId != uploaderId && !isAdmin) return bad("denied")
-            upload.copyTo(dst)
-            if (mapData != null) {
-                DataManager.updateMapInfo(safe) { it.uploaderId = uploaderId }
+
+            if (dst.exists()) {
+                if (mapData?.uploaderId != uploaderId && !isAdmin) {
+                    return bad("denied")
+                }
+                upload.copyTo(dst)
+                if (mapData != null) {
+                    DataManager.updateMapInfo(safe) { it.uploaderId = uploaderId }
+                }
+            } else {
+                upload.copyTo(dst)
+                DataManager.maps.put(safe, MapData(safe, uploaderId))
             }
+
             Vars.maps.reload()
             return ok("uploaded")
         }
@@ -101,7 +113,11 @@ object WebUploader {
             if (!f.exists()) return notFound()
             val mapData = DataManager.maps[name]
             val uploaderId = DataManager.getIdByUuid(uuid)
-            if (mapData?.uploaderId != uploaderId && !isAdmin) return bad("denied")
+
+            if (mapData?.uploaderId != uploaderId && !isAdmin) {
+                return bad("denied")
+            }
+
             f.delete()
             DataManager.maps.remove(name)
             DataManager.requestSave()
@@ -115,54 +131,54 @@ object WebUploader {
 
             sb.append(
                 """
-    <!doctype html>
-    <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport"
-            content="width=device-width,initial-scale=1,viewport-fit=cover">
-      <title>Maps</title>
-      <style>
-        :root{
-          --bg:#ffffff;
-          --text:#1b1b1b;
-          --accent:#52779b;
-          --border:#e2e2e2;
-        }
-        @media (prefers-color-scheme:dark){
-          :root{
-            --bg:#1b1b1b;
-            --text:#d0d0d0;
-            --accent:#75adff;
-            --border:#333333;
-          }
-        }
-        *{box-sizing:border-box;margin:0;padding:0;}
-        body{
-          font-family:system-ui,sans-serif;
-          background:var(--bg);
-          color:var(--text);
-          line-height:1.6;
-          max-width:720px;
-          margin:auto;
-          padding:1rem;
-          -webkit-font-smoothing:antialiased;
-        }
-        h1{font-size:1.5rem;margin:1.2rem 0;}
-        form{margin-bottom:1rem;}
-        input[type=file]{margin-right:.5rem}
-        ul{list-style:none;padding-left:0}
-        li{border-bottom:1px solid var(--border);padding:.6rem 0}
-        a{color:var(--accent);text-decoration:none}
-      </style>
-    </head>
-    <body>
-      <h1>Upload Map</h1>
-      <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".msav" required>
-        <input type="submit" value="Upload">
-      </form>
-      <ul>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Maps</title>
+  <style>
+    :root{
+      --bg:#ffffff;
+      --text:#1b1b1b;
+      --accent:#52779b;
+      --border:#e2e2e2;
+    }
+    @media (prefers-color-scheme:dark){
+      :root{
+        --bg:#1b1b1b;
+        --text:#d0d0d0;
+        --accent:#75adff;
+        --border:#333333;
+      }
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      line-height:1.6;
+      max-width:720px;
+      margin:auto;
+      padding:1rem;
+      -webkit-font-smoothing:antialiased;
+    }
+    h1{font-size:1.5rem;margin:1.2rem 0;}
+    form{margin-bottom:1rem;}
+    input[type=file]{margin-right:.5rem}
+    ul{list-style:none;padding-left:0}
+    li{border-bottom:1px solid var(--border);padding:.6rem 0}
+    a{color:var(--accent);text-decoration:none}
+  </style>
+</head>
+<body>
+  <h1>Upload Map</h1>
+  <form method="POST" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".msav" required>
+    <input type="submit" value="Upload">
+  </form>
+  <ul>
 """.trimIndent()
             )
 
@@ -181,9 +197,9 @@ object WebUploader {
 
             sb.append(
                 """
-      </ul>
-    </body>
-    </html>
+  </ul>
+</body>
+</html>
 """.trimIndent()
             )
 

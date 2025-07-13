@@ -17,7 +17,6 @@ import mindustry.net.NetConnection
 import mindustry.net.Packets.*
 import plugin.core.*
 import plugin.core.PermissionManager.isBanned
-import kotlin.math.max
 
 object NetEvents {
 
@@ -38,12 +37,9 @@ object NetEvents {
         return null as String?
     }
 
-    private fun getLevel(p: Player) = max(1, (DataManager.getPlayerDataByUuid(p.uuid())?.wins ?: 0) / 20)
-
     private fun broadcast(sender: Player, raw: String) {
         val plain = Strings.stripColors(raw)
-        val prefix = "${PluginVars.INFO}<lv${getLevel(sender)}> ${sender.name()}${PluginVars.RESET}"
-        val local = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
+        val local = "${PluginVars.GRAY}$plain${PluginVars.RESET}"
         sender.sendMessage(local)
 
         Groups.player.each { r ->
@@ -51,7 +47,7 @@ object NetEvents {
             val lang = DataManager.getPlayerDataByUuid(r.uuid())?.lang ?: r.locale()
             Translator.translate(plain, "auto", lang, { tr ->
                 val body = if (tr != plain) "$plain ${PluginVars.SECONDARY}($tr)${PluginVars.RESET}" else plain
-                r.sendMessage("$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}")
+                r.sendMessage("$local: $body")
             }, { r.sendMessage(local) })
         }
     }
@@ -69,7 +65,7 @@ object NetEvents {
         val adminName = admin.name()
         val targetName = target.name()
 
-        fun restore() = RevertBuild.restorePlayerEditsWithinSeconds(uuid, 200)
+        fun restore() = RevertBuild.restorePlayerEditsWithinSeconds(uuid, 300)
 
         when (pkt.action) {
             AdminAction.kick -> {

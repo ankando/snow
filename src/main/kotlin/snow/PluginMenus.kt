@@ -829,7 +829,6 @@ object PluginMenus {
         }
 
         val rows = mutableListOf<Array<String?>>()
-        rows.add(arrayOf("${PluginVars.SECONDARY}\uE88F${PluginVars.RESET}"))
         for (rowIndex in 0 until maxRows) {
             val thisRow = Array(columns.size) { colIndex -> columns[colIndex][rowIndex] }
             rows.add(thisRow)
@@ -848,16 +847,12 @@ object PluginMenus {
 
     private fun onMenuChoose(player: Player, choice: Int) {
         if (choice < 0) return
-        if (choice == 0) {
-            Call.hideFollowUpMenu(player.con, teamMenuId)
-            return
-        }
 
         val teams = tempTeamChoices[player.uuid()]?.toList()?.toMutableList()
         if (teams.isNullOrEmpty()) return
 
         val totalCols = teams.size
-        val adjustedChoice = choice - 1
+        val adjustedChoice = choice
 
         val colIndex = adjustedChoice % totalCols
         val rowIndex = adjustedChoice / totalCols
