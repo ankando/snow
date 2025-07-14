@@ -1035,6 +1035,7 @@ object PluginMenus {
                     )
                     return@createTextInput
                 }
+
                 RevertBuild.restoreAllPlayersEditsWithinSeconds(seconds)
                 Call.announce(
                     player.con,
@@ -1046,6 +1047,7 @@ object PluginMenus {
         revertPlayers.forEach { uuid ->
             val acc = DataManager.getPlayerDataByUuid(uuid)
             val name = acc?.account ?: uuid.take(8)
+
             btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
                 MenusManage.createTextInput(
                     title = I18nManager.get("revert.input_seconds.title", player),
@@ -1061,16 +1063,12 @@ object PluginMenus {
                         )
                         return@createTextInput
                     }
-                    val target = Groups.player.find { it.uuid() == uuid }
-                    restorePlayerEditsWithinSeconds(target.uuid(), seconds)
+
+                    restorePlayerEditsWithinSeconds(uuid, seconds)
+
                     Call.announce(
                         player.con,
-                        "${PluginVars.SUCCESS}${
-                            I18nManager.get(
-                                "revert.player_success",
-                                player
-                            )
-                        } $name${PluginVars.RESET}"
+                        "${PluginVars.SUCCESS}${I18nManager.get("revert.player_success", player)} $name${PluginVars.RESET}"
                     )
                 }(player)
             })
@@ -1082,8 +1080,8 @@ object PluginMenus {
             desc = { _, _, _ -> "" },
             options = { _, _, _ -> btns }
         )(player, 1)
-
     }
+
 
     val uploadMapMenuId: Int = Menus.registerMenu { p, choice ->
         if (p == null) return@registerMenu
