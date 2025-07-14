@@ -10,6 +10,7 @@ import mindustry.gen.Groups
 import mindustry.gen.Player
 import plugin.core.*
 import plugin.core.PermissionManager.isCoreAdmin
+import plugin.core.PermissionManager.isNormal
 import plugin.core.PermissionManager.verifyPermissionLevel
 import plugin.core.Translator.translate
 import plugin.snow.PluginMenus.beginVotekick
@@ -66,16 +67,16 @@ object ClientCommands {
             }
             PluginMenus.showTeamMenu(player)
         }
-        register("rules", "", "helpCmd.rules", PermissionLevel.NORMAL) { _, player ->
+        register("rules", "", "helpCmd.rules") { _, player ->
             PluginMenus.showRulesMenu(player)
         }
         register("info", "", "helpCmd.info") { _, player ->
             PluginMenus.showMapInfoMenu(player, Vars.state.map)
         }
-        register("upload", "", "helpCmd.upload", PermissionLevel.NORMAL) { _, player ->
+        register("upload", "", "helpCmd.upload") { _, player ->
             PluginMenus.showUploadMapMenu(player)
         }
-        register("revert", "", "helpCmd.revert", PermissionLevel.CORE_ADMIN) { _, player ->
+        register("revert", "", "helpCmd.revert") { _, player ->
             PluginMenus.showRevertMenu(player)
         }
         register("profile", "", "helpCmd.profile") { _, player ->
@@ -91,7 +92,7 @@ object ClientCommands {
                 netServer.sendWorldData(player)
             }
         }
-        register("votekick", "[player] [reason]", "helpCmd.votekick", PermissionLevel.NORMAL) { args, player ->
+        register("votekick", "[player] [reason]", "helpCmd.votekick") { args, player ->
             if (Groups.player.size() < 3) {
                 Call.announce(
                     player.con,
@@ -198,9 +199,10 @@ object ClientCommands {
                 }
             }
         }
-        register("surrender", "", "helpCmd.surrender", PermissionLevel.NORMAL) { _, player ->
+        register("surrender", "", "helpCmd.surrender") { _, player ->
             val team = player.team()
             val teamPlayerCount = Groups.player.count { it.team() == team && !it.dead() }
+
             if (team == Team.derelict || !team.data().hasCore() || teamPlayerCount < 3) {
                 Call.announce(
                     player.con,
@@ -208,12 +210,11 @@ object ClientCommands {
                 )
                 return@register
             }
+
             showConfirmMenu(player) {
                 VoteManager.createVote(
                     isTeamVote = true,
-                    creator = player,
-                    title = "${PluginVars.WARN}${I18nManager.get("surrender.vote.title", player)}${PluginVars.RESET}",
-                    desc = "${PluginVars.GRAY}${I18nManager.get("surrender.vote.desc", player)}${PluginVars.RESET}",
+                    creator = player
                 ) { ok ->
                     if (ok) {
                         team.cores().forEach { core ->
@@ -238,7 +239,26 @@ object ClientCommands {
                         )
                     }
                 }
+                Groups.player.each { p ->
+                    if (p.team() == team && p != player && !p.dead() && isNormal(p.uuid())) {
+                        val title = "${PluginVars.WARN}${I18nManager.get("surrender.vote.title", p)}${PluginVars.RESET}"
+                        val desc = "${PluginVars.GRAY}${I18nManager.get("surrender.vote.desc", p)}${PluginVars.RESET}"
+
+                        val menu = MenusManage.createConfirmMenu(
+                            title = title,
+                            desc = desc,
+                            onResult = { pl, choice ->
+                                if (choice == 0) {
+                                    VoteManager.addVote(pl.uuid())
+                                }
+                            }
+                        )
+
+                        menu(p)
+                    }
+                }
             }
         }
+
     }
 }

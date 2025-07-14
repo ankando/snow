@@ -29,9 +29,10 @@ object NetEvents {
 
         if (raw.lowercase() == "y") {
             val vote = VoteManager.globalVoteSession
-            if (vote != null && vote.creator !== p) vote.voted += p.uuid()
+            if (vote != null && vote.creator !== p) VoteManager.addVote(p.uuid())
             return null
         }
+
 
         broadcast(p, raw)
         return null as String?

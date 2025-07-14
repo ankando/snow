@@ -17,6 +17,7 @@ import mindustry.world.Block
 import plugin.core.*
 import plugin.core.MenusManage.createConfirmMenu
 import plugin.core.PermissionManager.isCoreAdmin
+import plugin.core.PermissionManager.isNormal
 import plugin.core.PermissionManager.verifyPermissionLevel
 import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
 import kotlin.math.max
@@ -482,7 +483,7 @@ object PluginMenus {
 
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
         val isAdmin = isCoreAdmin(player.uuid())
-        val normalCount = Groups.player.count { PermissionManager.isNormal(it.uuid()) }
+        val normalCount = Groups.player.count { isNormal(it.uuid()) }
         val isOk = isAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
@@ -500,30 +501,42 @@ object PluginMenus {
                 )
             } else {
                 if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60) {
-                    Call.announce(player.con,"${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
+                    Call.announce(player.con, "${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
                     return@MenuEntry
                 }
+
                 showConfirmMenu(player) {
                     VoteManager.createVote(
                         isTeamVote = false,
-                        creator = player,
-                        title = "${PluginVars.INFO}${I18nManager.get("rtv.title", player)}${PluginVars.RESET}",
-                        desc = "\uE827 ${PluginVars.GRAY}${player.name} ${
-                            I18nManager.get(
-                                "rtv.desc",
-                                player
-                            )
-                        } ${map.name()}${PluginVars.RESET}"
+                        creator = player
                     ) { ok ->
-                        if (ok) {
-                            if (Vars.state.isGame) {
-                                reloadWorld(map)
-                            }
+                        if (ok && Vars.state.isGame) {
+                            reloadWorld(map)
+                        }
+                    }
+
+                    Groups.player.each { p ->
+                        if (p != player && !p.dead() && isNormal(p.uuid())) {
+                            val title = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
+                            val desc = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
+
+                            val menu = createConfirmMenu(
+                                title = title,
+                                desc = desc,
+                                onResult = { pl, choice ->
+                                    if (choice == 0) {
+                                        VoteManager.addVote(pl.uuid())
+                                    }
+                                }
+                            )
+
+                            menu(p)
                         }
                     }
                 }
             }
         }
+
 
         val btnChange = MenuEntry(
             "${if (isOk) strong else weak}${
@@ -673,10 +686,11 @@ object PluginMenus {
             MenusManage.createTextInput(
                 title = I18nManager.get("profile.password.title", player),
                 desc = I18nManager.get("profile.password.desc", player),
-                isNum = true,
+                isNum = false,
                 placeholder = ""
             ) { _, input ->
                 val trimPwd = input.trim()
+
                 if (trimPwd.length < 4) {
                     Call.announce(
                         player.con,
@@ -684,6 +698,18 @@ object PluginMenus {
                     )
                     return@createTextInput
                 }
+
+                val allowedSymbols = setOf('.', ',', '-', '_', '@', '#', '!', '?')
+                val isValid = trimPwd.all { it.isLetterOrDigit() || it.isWhitespace() || it in allowedSymbols }
+
+                if (!isValid) {
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.WARN}${I18nManager.get("profile.password.invalid", player)}${PluginVars.RESET}"
+                    )
+                    return@createTextInput
+                }
+
                 DataManager.updatePlayer(acc.id) { it.password = trimPwd }
                 Call.announce(
                     player.con,
@@ -691,6 +717,7 @@ object PluginMenus {
                 )
             }(player)
         }
+
 
         val btnLang = MenuEntry("${strong}${I18nManager.get("profile.language", player)}: ${weak}${DataManager.getPlayerDataByUuid(player.uuid())?.lang}${PluginVars.RESET}") {
             showLanguageMenu(player)
@@ -1120,18 +1147,32 @@ object PluginMenus {
         VoteManager.createVote(
             isTeamVote = false,
             creator = viewer,
-            title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", viewer)}${PluginVars.RESET}",
-            desc = "\uE817 ${PluginVars.GRAY}${viewer.name} ${
-                I18nManager.get(
-                    "playerInfo.votekick.desc",
-                    viewer
-                )
-            } ${target.name()}${PluginVars.RESET}",
             excludePlayers = exclude
         ) { ok ->
             if (ok) {
                 target.kick("")
                 restorePlayerEditsWithinSeconds(target.uuid(), 200)
+            }
+        }
+
+        Groups.player.each { p ->
+            if (p != viewer && p != target && !p.dead() && isNormal(p.uuid())) {
+                val title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", p)}${PluginVars.RESET}"
+                val desc = "\uE817 ${PluginVars.GRAY}${viewer.name} ${
+                    I18nManager.get("playerInfo.votekick.desc", p)
+                } ${target.name()}${PluginVars.RESET}"
+
+                val voteMenu = createConfirmMenu(
+                    title = title,
+                    desc = desc,
+                    onResult = { player, choice ->
+                        if (choice == 0) {
+                            VoteManager.addVote(player.uuid())
+                        }
+                    }
+                )
+
+                voteMenu(p)
             }
         }
     }

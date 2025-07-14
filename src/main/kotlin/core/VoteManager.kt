@@ -25,8 +25,6 @@ object VoteManager {
     fun createVote(
         isTeamVote: Boolean,
         creator: Player,
-        title: String,
-        desc: String,
         excludePlayers: List<Player>? = null,
         callback: (Boolean) -> Unit
     ) {
@@ -69,15 +67,6 @@ object VoteManager {
             excludeUuids
         )
         if (isTeamVote) teamVotes[teamId] = session else globalVote = session
-
-        val voteMenu = MenusManage.createConfirmMenu(
-            title = title,
-            desc = desc,
-            onResult = { player, choice ->
-                if (choice == 0) addVote(player.uuid())
-            }
-        )
-        voters.forEach { voteMenu(it) }
     }
 
     fun addVote(uuid: String) {
