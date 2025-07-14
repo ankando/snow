@@ -68,6 +68,7 @@ object WebUploader {
         private fun handlePost(s: IHTTPSession, uuid: String, isAdmin: Boolean): Response {
             val files = HashMap<String?, String?>()
             s.parseBody(files)
+
             val name = s.parameters["file"]?.firstOrNull() ?: return bad("no file")
             val safe = Fi(name).name()
 
@@ -79,24 +80,22 @@ object WebUploader {
 
             val dst = mapDir.child(safe)
             val uploaderId = DataManager.getIdByUuid(uuid) ?: -1
-            val mapData = DataManager.maps[safe]
+            val mapData = DataManager.maps.get(safe)
 
-            if (dst.exists()) {
-                if (mapData?.uploaderId != uploaderId && !isAdmin) {
-                    return bad("denied")
-                }
-                upload.copyTo(dst)
-                if (mapData != null) {
-                    DataManager.updateMapInfo(safe) { it.uploaderId = uploaderId }
-                }
-            } else {
-                upload.copyTo(dst)
-                DataManager.maps.put(safe, MapData(safe, uploaderId))
+            if (dst.exists() && mapData != null && mapData.uploaderId != uploaderId && !isAdmin) {
+                return bad("denied")
+            }
+
+            upload.copyTo(dst)
+
+            if (mapData == null) {
+                DataManager.registerMap(safe, uploaderId)
             }
 
             Vars.maps.reload()
             return ok("uploaded")
         }
+
 
         private fun sendFile(name: String?): Response {
             if (name.isNullOrBlank() || !name.endsWith(".msav")) return bad("no file")

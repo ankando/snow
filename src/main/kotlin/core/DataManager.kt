@@ -148,10 +148,11 @@ object DataManager {
         requestSave()
     }
 
-    fun updateMapInfo(name: String, block: (MapData) -> Unit) {
-        val data = maps[name] ?: return
-        block(data)
-        requestSave()
+    fun registerMap(name: String, uploaderId: Int) {
+        if (!maps.containsKey(name)) {
+            maps.put(name, MapData(name, uploaderId))
+            requestSave()
+        }
     }
 
     fun requestSave() {
