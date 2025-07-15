@@ -20,7 +20,6 @@ import plugin.core.PermissionManager.isBanned
 
 object NetEvents {
 
-
     @JvmStatic
     fun chat(p: Player?, msg: String?): String? {
         if (p == null || msg.isNullOrBlank() || isBanned(p.uuid())) return null
@@ -32,7 +31,6 @@ object NetEvents {
             if (vote != null && vote.creator !== p) VoteManager.addVote(p.uuid())
             return null
         }
-
 
         broadcast(p, raw)
         return null as String?
@@ -64,20 +62,16 @@ object NetEvents {
 
         Events.fire(EventType.AdminRequestEvent(admin, target, pkt.action))
         val uuid = target.uuid()
-        val adminName = admin.name()
-        val targetName = target.name()
 
         fun restore() = RevertBuild.restorePlayerEditsWithinSeconds(uuid, 200)
 
         when (pkt.action) {
             AdminAction.kick -> {
                 restore()
-                announce("admin.kick", adminName, targetName)
                 target.kick(KickReason.kick)
             }
             AdminAction.ban -> {
                 restore()
-                announce("admin.ban", adminName, targetName)
                 DataManager.getPlayerDataByUuid(uuid)?.apply {
                     banUntil = Time.millis() + BAN_MS
                     DataManager.requestSave()
@@ -89,14 +83,10 @@ object NetEvents {
                     target.info.timesJoined, target.info.timesKicked, arrayOf("[hidden]"), target.info.names.toArray(String::class.java)))
             AdminAction.wave  -> {
                 Vars.logic.skipWave()
-                announce("admin.wave", adminName)
             }
             AdminAction.switchTeam -> {}
         }
     }
-
-    private fun announce(key: String, vararg names: String) =
-        Call.announce("${PluginVars.WARN}${names.joinToString(" ")} ${I18nManager.get(key, null)}${PluginVars.RESET}")
 
 
     @JvmStatic

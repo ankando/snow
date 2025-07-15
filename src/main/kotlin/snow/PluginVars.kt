@@ -6,7 +6,7 @@ object PluginVars {
     const val MENU_CONFIRM_TIMEOUT_SEC = 10L
     const val MENU_TEXT_INPUT_MAX_CHARS = 32
     const val RATIO = 0.65
-    const val TEAM_RATIO = 0.75
+    const val TEAM_RATIO = 0.7
 
     const val WHITE = "[#F1F1F1CC]"
     const val GRAY = "[#D0D0D0EE]"

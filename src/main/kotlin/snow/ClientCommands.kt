@@ -196,6 +196,7 @@ object ClientCommands {
                         player.con,
                         "${PluginVars.INFO}${I18nManager.get("logout.success", player)}${PluginVars.RESET}"
                     )
+                    player.kick("", 0)
                 }
             }
         }
@@ -212,10 +213,7 @@ object ClientCommands {
             }
 
             showConfirmMenu(player) {
-                VoteManager.createVote(
-                    isTeamVote = true,
-                    creator = player
-                ) { ok ->
+                VoteManager.createTeamVote(player) { ok ->
                     if (ok) {
                         team.cores().forEach { core ->
                             mindustry.entities.Damage.damage(
@@ -249,7 +247,7 @@ object ClientCommands {
                             desc = desc,
                             onResult = { pl, choice ->
                                 if (choice == 0) {
-                                    VoteManager.addVote(pl.uuid())
+                                    VoteManager.addVote(pl.uuid(), team)
                                 }
                             }
                         )
@@ -259,6 +257,7 @@ object ClientCommands {
                 }
             }
         }
+
 
     }
 }

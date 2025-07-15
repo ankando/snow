@@ -77,6 +77,7 @@ object MenusManage {
                         title(player, 1, 1, userData),
                         desc?.invoke(player, 1, userData) ?: "",
                         buttons.toTypedArray()
+
                     )
                 } else {
                     val totalPages = max(1, (entries.size + perPage - 1) / perPage)

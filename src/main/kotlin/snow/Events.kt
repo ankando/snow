@@ -9,14 +9,13 @@ import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Sounds
-import mindustry.world.blocks.storage.CoreBlock
 import plugin.core.*
 import plugin.snow.PluginMenus.showAuthMenu
 import kotlin.math.max
 
 object EventManager {
 
-    private val tick10s = Interval()
+    private val ticks = Interval()
     private val usedMaps = mutableSetOf<String>()
     private val modeTags = mapOf(
         "pvp" to Gamemode.pvp,
@@ -29,7 +28,7 @@ object EventManager {
     fun init() {
 
         Events.run(Trigger.update) {
-            if (Vars.state.isGame && tick10s.get(600f)) {
+            if (Vars.state.isGame && ticks.get(300f)) {
                 VoteManager.endVotes()
                 if (DataManager.needSave) DataManager.saveAll()
             }
@@ -57,16 +56,6 @@ object EventManager {
             when (Vars.state.rules.mode()) {
                 Gamemode.pvp -> handlePvpGameOver(winner)
                 else         -> handleCoopGameOver(winner)
-            }
-        }
-
-        Events.on(BlockDestroyEvent::class.java) { e ->
-            val team = e.tile.team()
-            if (e.tile.block() is CoreBlock && team != Team.derelict && team.cores().size <= 1) {
-                val key = if (Vars.state.rules.mode() == Gamemode.pvp) "core.lost.team" else "core.lost.single"
-                team.data().players.each { p ->
-                    Call.announce(p.con, "${PluginVars.ERROR}${I18nManager.get(key, p)}${PluginVars.RESET}")
-                }
             }
         }
 

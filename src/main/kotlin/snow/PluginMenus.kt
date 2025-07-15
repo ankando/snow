@@ -66,7 +66,7 @@ object PluginMenus {
 
     private fun promptRuleValueInput(player: Player, rule: String) {
         MenusManage.createTextInput(
-            title = "Enter new value for $rule",
+            title = rule,
             desc = "",
             placeholder = "",
             isNum = false,
@@ -74,7 +74,6 @@ object PluginMenus {
         ) { p, input ->
             val newValue = input.toFloatOrNull()
             if (newValue == null || newValue < 0f) {
-                Call.announce(p.con, "${PluginVars.GRAY}Invalid input. Must be a number >= 0.")
                 return@createTextInput
             }
             Vars.state.rules.setRule(rule, newValue)
@@ -117,10 +116,6 @@ object PluginMenus {
                         val cur = getRuleValue(rule) as? Boolean ?: return@verifyPermissionLevel
                         Vars.state.rules.setRule(rule, !cur)
                         Call.setRules(Vars.state.rules)
-                        Call.announce(
-                            player.con,
-                            "${PluginVars.INFO}${player.plainName()} toggled $rule to ${!cur}${PluginVars.RESET}"
-                        )
                         showRulesMenu(player)
                     } else if (editableFloatRules.contains(rule)) {
                         promptRuleValueInput(player, rule)
@@ -423,7 +418,7 @@ object PluginMenus {
                     viewer.con,
                     "${PluginVars.SUCCESS}${
                         I18nManager.get(
-                            "playerInfo.setban.SUCCESS",
+                            "playerInfo.setban.success",
                             viewer
                         )
                     }${PluginVars.RESET}"
@@ -488,7 +483,7 @@ object PluginMenus {
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
         val desc = buildString {
-            append("\n${PluginVars.INFO}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
+            append("\n$${PluginVars.SECONDARY}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
             append("\n${PluginVars.GRAY}${map.description()}${PluginVars.RESET}\n")
         }
 
@@ -506,8 +501,7 @@ object PluginMenus {
                 }
 
                 showConfirmMenu(player) {
-                    VoteManager.createVote(
-                        isTeamVote = false,
+                    VoteManager.createGlobalVote(
                         creator = player
                     ) { ok ->
                         if (ok && Vars.state.isGame) {
@@ -532,6 +526,9 @@ object PluginMenus {
 
                             menu(p)
                         }
+
+
+
                     }
                 }
             }
@@ -686,7 +683,7 @@ object PluginMenus {
             MenusManage.createTextInput(
                 title = I18nManager.get("profile.password.title", player),
                 desc = I18nManager.get("profile.password.desc", player),
-                isNum = false,
+                isNum = true,
                 placeholder = ""
             ) { _, input ->
                 val trimPwd = input.trim()
@@ -1142,8 +1139,8 @@ object PluginMenus {
 
     fun beginVotekick(viewer: Player, target: Player) {
         val exclude = listOf(viewer, target)
-        VoteManager.createVote(
-            isTeamVote = false,
+
+        VoteManager.createGlobalVote(
             creator = viewer,
             excludePlayers = exclude
         ) { ok ->
@@ -1174,6 +1171,7 @@ object PluginMenus {
             }
         }
     }
+
 
     fun showConfirmMenu(player: Player, onConfirm: (Player) -> Unit) {
         val title = I18nManager.get("confirm.title", player)

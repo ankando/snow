@@ -1,6 +1,7 @@
 package plugin.core
 
 import mindustry.Vars
+import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
@@ -9,114 +10,108 @@ import plugin.snow.PluginVars
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-object VoteManager {
+object VoteManager{
+
     private var globalVote: VoteSession? = null
-    private val teamVotes = mutableMapOf<Int, VoteSession>()
+    private val teamVotes = mutableMapOf<Team, VoteSession>()
 
-    val globalVoteSession: VoteSession? get() = globalVote
-    val globalVoteCreator: Player? get() = globalVote?.creator
-    val globalVoteExcluded: Set<String> get() = globalVote?.excluded ?: emptySet()
+    val globalVoteSession get() = globalVote
+    val globalVoteCreator  get() = globalVote?.creator
+    val globalVoteExcluded get() = globalVote?.excluded ?: emptySet()
 
-    fun clearVote() {
+    fun clearVote(){
         globalVote = null
         teamVotes.clear()
     }
 
-    fun createVote(
-        isTeamVote: Boolean,
+
+    fun createGlobalVote(
         creator: Player,
         excludePlayers: List<Player>? = null,
+        autoPassIfNoVoter: Boolean   = true,
         callback: (Boolean) -> Unit
-    ) {
-        if (!Vars.state.isGame || !isNormal(creator.uuid())) return
-        if (Groups.player.count { isNormal(it.uuid()) } <= 1) {
-            Call.announce(creator.con, "${PluginVars.ERROR}${I18nManager.get("vote.notenough", creator)}${PluginVars.RESET}")
-            return
-        }
+    ){
+        if(!Vars.state.isGame || !isNormal(creator.uuid()) || globalVote != null) return
 
-        val excludeUuids = excludePlayers?.mapTo(HashSet()) { it.uuid() } ?: emptySet()
-        val teamId = if (isTeamVote) creator.team().id else -1
+        val exclude = excludePlayers?.mapTo(HashSet()){ it.uuid() } ?: emptySet()
+        val voters  = buildVoterSet(creator, exclude)
 
-        if (!isTeamVote && globalVote != null) {
-            Call.announce(creator.con, "${PluginVars.WARN}${I18nManager.get("vote.globalbusy", creator)}${PluginVars.RESET}")
-            return
-        }
-        if (isTeamVote && teamVotes[teamId] != null) {
-            Call.announce(creator.con, "${PluginVars.WARN}${I18nManager.get("vote.teambusy", creator)}${PluginVars.RESET}")
-            return
-        }
+        if(voters.isEmpty()){ callback(autoPassIfNoVoter); return }
 
-        val voters = Groups.player.filter {
-            it != creator && isNormal(it.uuid()) && it.uuid() !in excludeUuids && (!isTeamVote || it.team().id == teamId)
-        }
-
-        if (voters.isEmpty()) {
-            Call.announce(creator.con, "${PluginVars.ERROR}${I18nManager.get("vote.novoters", creator)}${PluginVars.RESET}")
-            return
-        }
-
-        val session = VoteSession(
-            isTeamVote,
-            teamId,
-            voters.map { it.uuid() },
-            mutableSetOf(),
-            0,
-            System.currentTimeMillis(),
-            creator,
-            callback,
-            excludeUuids
-        )
-        if (isTeamVote) teamVotes[teamId] = session else globalVote = session
+        globalVote = VoteSession(voters, mutableSetOf(), System.currentTimeMillis(),
+            creator, callback, exclude)
     }
 
-    fun addVote(uuid: String) {
-        val session = globalVote ?: return
-        if (uuid in session.voted) return
-        session.voted.add(uuid)
-        session.ok++
+    fun createTeamVote(
+        creator: Player,
+        autoPassIfNoVoter: Boolean = true,
+        callback: (Boolean) -> Unit
+    ){
+        val team = creator.team()
+        if(!Vars.state.isGame || !isNormal(creator.uuid()) || teamVotes.containsKey(team)) return
+
+        val voters = buildVoterSet(creator, emptySet()).filterTo(mutableSetOf()){
+            Groups.player.find{ p -> p.uuid() == it }?.team() == team
+        }
+
+        if(voters.isEmpty()){ callback(autoPassIfNoVoter); return }
+
+        teamVotes[team] = VoteSession(voters, mutableSetOf(), System.currentTimeMillis(),
+            creator, callback, emptySet())
     }
 
-    fun endVotes() {
-        globalVote?.let(::checkVote)
-        teamVotes.values.toList().forEach(::checkVote)
+    fun addVote(uuid: String){ globalVote?.takeIf { uuid in it.voters }?.voted?.add(uuid) }
+    fun addVote(uuid: String, team: Team){
+        teamVotes[team]?.takeIf { uuid in it.voters }?.voted?.add(uuid)
     }
 
-    private fun checkVote(session: VoteSession) {
-        val total = session.voters.size
-        val timeout = PluginVars.MENU_CONFIRM_TIMEOUT_SEC * 1000
-        val elapsed = System.currentTimeMillis() - session.startTime
-        val allVoted = session.voted.size >= total
 
-        val required = if (total <= 2) total else ceil((total + 1) * (if (session.team) PluginVars.TEAM_RATIO else PluginVars.RATIO)).toInt()
-        val passed = session.ok >= required || allVoted || elapsed > timeout
-        if (!passed) return
+    fun endVotes(){
+        globalVote?.also { if(checkVote(it, PluginVars.RATIO)) globalVote = null }
+        teamVotes.entries.removeAll { checkVote(it.value, PluginVars.TEAM_RATIO) }
+    }
 
-        val percent = if (total == 0) 0 else (session.ok * 100.0 / total).roundToInt()
+    private fun buildVoterSet(creator: Player, exclude: Set<String>) =
+        Groups.player.asSequence()
+            .filter { isNormal(it.uuid()) && it.uuid() != creator.uuid() && it.uuid() !in exclude }
+            .map   { it.uuid() }
+            .toMutableSet()
 
-        if (session.ok >= required) {
-            Groups.player.each {
-                Call.announce(it.con, "${PluginVars.SUCCESS}${I18nManager.get("vote.success", it)}${PluginVars.RESET}")
+    private fun checkVote(session: VoteSession, ratio: Double): Boolean {
+        val total     = session.voters.size
+        val required  = if (total <= 2) total else ceil(total * ratio).toInt()
+        val elapsedMs = System.currentTimeMillis() - session.startTime
+        val timeout   = elapsedMs > PluginVars.MENU_CONFIRM_TIMEOUT_SEC * 1000
+        val yesVotes  = session.voted.size
+        val allVoted  = yesVotes >= total
+
+        val passed = yesVotes >= required
+        if (!(passed || timeout || allVoted)) return false
+
+        val percent = if (total == 0) 100 else (yesVotes * 100.0 / total).roundToInt()
+        val info = "($percent%, $yesVotes/$required)"
+        val color = if (passed) PluginVars.SUCCESS else PluginVars.WARN
+
+        Groups.player.each {
+            val msg = when {
+                passed -> I18nManager.get("vote.success", it)
+                else -> I18nManager.get("vote.failed", it)
             }
-            session.callback(true)
-        } else {
-            Groups.player.each {
-                Call.announce(
-                    it.con,
-                    "${PluginVars.WARN}${session.creator.name()}${I18nManager.get("vote.failed", it)} ${I18nManager.get("vote.action", it)} ($percent%)${PluginVars.RESET}"
-                )
-            }
-            session.callback(false)
+            Call.announce(it.con,
+                "$color${session.creator.name()}${PluginVars.RESET} " +
+                        "$msg $info${PluginVars.RESET}"
+            )
         }
 
-        if (session.teamId == -1) globalVote = null else teamVotes.remove(session.teamId)
+        session.callback(passed)
+        return true
     }
+
+
 
     data class VoteSession(
-        val team: Boolean,
-        val teamId: Int,
-        val voters: List<String>,
+        val voters: Set<String>,
         val voted: MutableSet<String>,
-        var ok: Int,
         val startTime: Long,
         val creator: Player,
         val callback: (Boolean) -> Unit,
