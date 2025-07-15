@@ -695,26 +695,16 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
         val canSet = !isCoreAdmin(target.uuid()) && target != viewer
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
-        val exclude = mutableListOf<Player>()
-        exclude.add(target)
 
         val desc = buildString {
             append("\n${PluginVars.WHITE}${acc.account}${PluginVars.RESET}\n\n")
+            append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.score", viewer)}: ${acc.score}${PluginVars.RESET}\n")
+            append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.wins", viewer)}: ${acc.wins}${PluginVars.RESET}\n")
+            append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.lang", viewer)}: ${acc.lang}${PluginVars.RESET}\n")
             append(
-                "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.score", viewer)}: ${acc.score}${PluginVars.RESET}\n"
-            )
-            append(
-                "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.wins", viewer)}: ${acc.wins}${PluginVars.RESET}\n"
-            )
-            append(
-                "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.lang", viewer)}: ${acc.lang}${PluginVars.RESET}\n"
-            )
-            append(
-                if (isCoreAdmin(target.uuid())) {
-                    "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.role", viewer)}: ${I18nManager.get("role.admin", viewer)}${PluginVars.RESET}\n"
-                } else {
-                    "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.role", viewer)}: ${I18nManager.get("role.normal", viewer)}${PluginVars.RESET}\n"
-                }
+                "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.role", viewer)}: ${
+                       if (isCoreAdmin(target.uuid())) "Admin" else "Player"
+                }${PluginVars.RESET}\n"
             )
         }
 
@@ -768,12 +758,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                 if (seconds == null || seconds < 0) {
                     Call.announce(
                         viewer.con,
-                        "${PluginVars.WARN}${
-                            I18nManager.get(
-                                "playerInfo.setban.invalid",
-                                viewer
-                            )
-                        }${PluginVars.RESET}"
+                        "${PluginVars.WARN}${I18nManager.get("playerInfo.setban.invalid", viewer)}${PluginVars.RESET}"
                     )
                     return@createTextInput
                 }
@@ -782,32 +767,20 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                 }
                 Call.announce(
                     viewer.con,
-                    "${PluginVars.SUCCESS}${
-                        I18nManager.get(
-                            "playerInfo.setban.success",
-                            viewer
-                        )
-                    }${PluginVars.RESET}"
+                    "${PluginVars.SUCCESS}${I18nManager.get("playerInfo.setban.success", viewer)}${PluginVars.RESET}"
                 )
-            }
+            }(viewer)
         }
 
         val rows = listOf(btnPm, btnVoteKick, btnBan)
         MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ ->
-                "${PluginVars.GRAY}${
-                    I18nManager.get(
-                        "playerInfo.title",
-                        viewer
-                    )
-                }${PluginVars.RESET}"
-            },
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("playerInfo.title", viewer)}${PluginVars.RESET}" },
             paged = false,
             desc = { _, _, _ -> desc },
             options = { _, _, _ -> rows }
         )(viewer, 1)
-
     }
+
     fun showMapMenu(player: Player, page: Int = 1) {
         val mapMenu = MenusManage.createMenu<Unit>(
             title = { _, page, total, _ ->

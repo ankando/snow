@@ -4,7 +4,6 @@ import arc.util.CommandHandler
 import arc.util.Time
 import mindustry.Vars
 import mindustry.Vars.netServer
-import mindustry.core.GameState
 import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
@@ -204,88 +203,7 @@ object ClientCommands {
                 }
             }
         }
-        register("metch", "", "helpCmd.metch") { _, player ->
-            if (!Vars.state.rules.pvp) {
-                player.sendMessage("${PluginVars.WARN}${I18nManager.get("metch.only_pvp", player)}${PluginVars.RESET}")
-                return@register
-            }
 
-            if (!isCoreAdmin(player.uuid())) {
-                player.sendMessage("${PluginVars.WARN}${I18nManager.get("metch.admin_only", player)}${PluginVars.RESET}")
-                return@register
-            }
-
-            fun showMapSelectMenu(player: Player) {
-                val selected = CompetitionManager.getAllMaps()
-                val title = "${PluginVars.GRAY}Maps ${selected.size}/3${PluginVars.RESET}"
-
-                val entries = Vars.maps.customMaps().map { map ->
-                    val alreadySelected = selected.contains(map)
-                    val label = if (alreadySelected)
-                        "${PluginVars.SUCCESS}✔ ${map.name()}"
-                    else
-                        map.name()
-
-                    MenuEntry("${PluginVars.WHITE}$label${PluginVars.RESET}") {
-                        if (alreadySelected) {
-                            CompetitionManager.removeMap(map)
-                        } else {
-                            if (selected.size < 3) {
-                                CompetitionManager.addMap(map)
-                            }
-                        }
-
-                        // 判断是否选够 3 张
-                        if (CompetitionManager.getAllMaps().size >= 3) {
-                            Vars.state.set(GameState.State.paused)
-                            CompetitionManager.setCompetitionState(1)
-                            PluginMenus.showTeamMenu(player)
-                        } else {
-                            showMapSelectMenu(player)
-                        }
-                    }
-                }
-
-                MenusManage.createMenu<Unit>(
-                    title = { _, _, _, _ -> title },
-                    desc = { _, _, _ -> "" },
-                    paged = true,
-                    options = { _, _, _ -> entries.toMutableList() }
-                )(player, 1)
-            }
-
-            val entries = listOf(
-                MenuEntry("${PluginVars.WHITE}${I18nManager.get("metch.prepare_match", player)}${PluginVars.RESET}") {
-                    if (CompetitionManager.getCompetitionState() != 0) {
-                        player.sendMessage("${PluginVars.WARN}${I18nManager.get("metch.already_started", player)}${PluginVars.RESET}")
-                        return@MenuEntry
-                    }
-                    CompetitionManager.resetCompetition()
-                    showMapSelectMenu(player)
-                },
-                MenuEntry("${PluginVars.WHITE}${I18nManager.get("metch.start_match", player)}${PluginVars.RESET}") {
-                    if (CompetitionManager.getCompetitionState() != 1) {
-                        player.sendMessage("${PluginVars.WARN}${I18nManager.get("metch.not_voting", player)}${PluginVars.RESET}")
-                        return@MenuEntry
-                    }
-                    CompetitionManager.initializeCompetitionMode()
-                    Call.announce("${PluginVars.SUCCESS}${I18nManager.get("metch.match_started", player)}${PluginVars.RESET}")
-                },
-                MenuEntry("${PluginVars.SECONDARY}${I18nManager.get("metch.cancel_match", player)}${PluginVars.RESET}") {
-                    CompetitionManager.resetCompetition()
-                    Vars.state.set(GameState.State.playing)
-                    Call.announce("${PluginVars.INFO}${I18nManager.get("metch.match_reset", player)}${PluginVars.RESET}")
-                }
-            )
-
-
-            MenusManage.createMenu<Unit>(
-                title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("metch.title", player)}${PluginVars.RESET}" },
-                desc = { _, _, _ -> "" },
-                paged = false,
-                options = { _, _, _ -> entries }
-            )(player, 1)
-        }
 
         register("surrender", "", "helpCmd.surrender") { _, player ->
             val team = player.team()

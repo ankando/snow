@@ -32,12 +32,19 @@ object I18nManager {
 
     fun get(key: String, player: Player?, resolveEscape: Boolean = true): String {
         val langCode = resolveLangCode(player)
-        val value = languages[langCode]?.get(key)
-            ?: default[key]
-            ?: key
+
+        val primary = languages[langCode]?.get(key)
+        val fallback = default[key]
+
+        val value = when {
+            !primary.isNullOrBlank() -> primary
+            !fallback.isNullOrBlank() -> fallback
+            else -> key
+        }
 
         return if (resolveEscape) value.replace("\\n", "\n") else value
     }
+
 
     private fun resolveLangCode(player: Player?): String {
         val rawLang = getPlayerDataByUuid(player?.uuid() ?: "")?.lang
