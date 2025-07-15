@@ -40,17 +40,30 @@ object NetEvents {
         val plain = Strings.stripColors(raw)
         val prefix = "${PluginVars.INFO}${sender.name()}${PluginVars.RESET}"
         val local = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
+
         sender.sendMessage(local)
 
-        Groups.player.each { r ->
-            if (r === sender) return@each
-            val lang = DataManager.getPlayerDataByUuid(r.uuid())?.lang ?: r.locale()
-            Translator.translate(plain, "auto", lang, { tr ->
-                val body = if (tr != plain) "$plain ${PluginVars.SECONDARY}($tr)${PluginVars.RESET}" else plain
-                r.sendMessage("$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}")
-            }, { r.sendMessage(local) })
+        Groups.player.each { recipient ->
+            if (recipient === sender) return@each
+
+            val lang = DataManager.getPlayerDataByUuid(recipient.uuid())?.lang ?: recipient.locale()
+            val target = recipient
+
+            Translator.translate(plain, "auto", lang,
+                onResult = { translated ->
+                    val body = if (translated != plain)
+                        "$plain ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                    else
+                        plain
+                    target.sendMessage("$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}")
+                },
+                onError = {
+                    target.sendMessage(local)
+                }
+            )
         }
     }
+
 
     private const val BAN_MS = 30 * 60_000L
 

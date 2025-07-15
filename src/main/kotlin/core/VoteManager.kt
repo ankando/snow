@@ -95,7 +95,7 @@ object VoteManager{
         Groups.player.each {
             val msg = when {
                 passed -> I18nManager.get("vote.success", it)
-                else -> I18nManager.get("vote.failed", it)
+                else -> ""
             }
             Call.announce(it.con,
                 "$color${session.creator.name()}${PluginVars.RESET} " +

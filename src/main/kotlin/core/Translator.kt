@@ -7,7 +7,6 @@ import arc.util.serialization.JsonReader
 
 object Translator {
     private val reader = JsonReader()
-
     fun translate(
         text: String,
         from: String,
@@ -16,7 +15,7 @@ object Translator {
         onError: Runnable
     ) {
         val url = "https://clients5.google.com/translate_a/t?client=dict-chrome-ex&dt=t"
-        val query = "tl=$from&sl=$to&q=${Strings.encode(text)}"
+        val query = "tl=$to&sl=$from&q=${Strings.encode(text)}"
 
         Http.post(url, query)
             .error { onError.run() }

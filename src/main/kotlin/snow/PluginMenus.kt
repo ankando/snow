@@ -21,11 +21,14 @@ import plugin.core.PermissionManager.isNormal
 import plugin.core.PermissionManager.verifyPermissionLevel
 import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
 import kotlin.math.max
+import kotlin.math.pow
 
 object PluginMenus {
+
     fun showGamesMenu(player: Player, page: Int = 1) {
         val games = listOf(
-            "2048" to ::show2048game
+            "2048" to ::show2048game,
+            "Lights Out" to ::showLightsOutGame
         )
 
         val menu = MenusManage.createMenu<Unit>(
@@ -46,14 +49,180 @@ object PluginMenus {
         menu(player, page)
     }
 
+private data class LightsOutGameStateData(
+    val lightGrid: Array<BooleanArray>,
+    var stepCounter: Int = 0,
+    var pendingHintCellIndex: Int = -1
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
 
+        other as LightsOutGameStateData
+
+        if (stepCounter != other.stepCounter) return false
+        if (pendingHintCellIndex != other.pendingHintCellIndex) return false
+        if (!lightGrid.contentDeepEquals(other.lightGrid)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = stepCounter
+        result = 31 * result + pendingHintCellIndex
+        result = 31 * result + lightGrid.contentDeepHashCode()
+        return result
+    }
+}
+
+    private val lightsOutGameStatesMap = mutableMapOf<String, LightsOutGameStateData>()
+
+
+private const val GRID_SIDE_LENGTH = 5
+
+private const val BTN_INDEX_REFRESH = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH      // 25
+private const val BTN_INDEX_CLOSE   = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH + 1  // 26
+private const val BTN_INDEX_HINT    = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH + 2  // 27
+
+private const val CHAR_LIGHT_ON  = "\uE853"
+private const val CHAR_LIGHT_OFF = "\uE86C"
+
+fun showLightsOutGame(player: Player) {
+    val playerUuid = player.uuid()
+    val playerState = lightsOutGameStatesMap.getOrPut(playerUuid) {
+        LightsOutGameStateData(generateRandomSolvableGrid())
+    }
+
+    val buttonRows = Array(GRID_SIDE_LENGTH + 1) { arrayOfNulls<String>(GRID_SIDE_LENGTH) }
+
+    for (row in 0 until GRID_SIDE_LENGTH) {
+        for (col in 0 until GRID_SIDE_LENGTH) {
+            val cellIdx = row * GRID_SIDE_LENGTH + col
+            val charBase = if (playerState.lightGrid[row][col]) CHAR_LIGHT_ON else CHAR_LIGHT_OFF
+
+            buttonRows[row][col] =
+                when {
+                    cellIdx == playerState.pendingHintCellIndex ->
+                        "${PluginVars.GOLD}$charBase[]"
+                    playerState.lightGrid[row][col] ->
+                        "${PluginVars.WHITE}$charBase${PluginVars.RESET}"
+                    else ->
+                        "${PluginVars.SECONDARY}$charBase${PluginVars.RESET}"
+                }
+        }
+    }
+
+    buttonRows[GRID_SIDE_LENGTH][0] = "${PluginVars.WHITE}\uE86F${PluginVars.RESET}"
+    buttonRows[GRID_SIDE_LENGTH][1] = "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
+    buttonRows[GRID_SIDE_LENGTH][2] = "${PluginVars.WHITE}\uE88E${PluginVars.RESET}"
+
+    val description = buildString {
+        append("\n${PluginVars.WHITE}${I18nManager.get("steps", player)}: ${playerState.stepCounter}${PluginVars.RESET}\n")
+        if (playerState.lightGrid.all { it.all(Boolean::not) })
+            append("\n\n${PluginVars.WHITE}${I18nManager.get("game.victory", player)}${PluginVars.RESET}\n")
+    }
+
+    Call.followUpMenu(
+        player.con,
+        lightsOutMenuId,
+        "${PluginVars.WHITE}Lights Out${PluginVars.RESET}",
+        description,
+        buttonRows
+    )
+}
+
+private fun generateRandomSolvableGrid(): Array<BooleanArray> {
+    while (true) {
+        val grid = Array(GRID_SIDE_LENGTH) { BooleanArray(GRID_SIDE_LENGTH) }
+        repeat(10 + Mathf.random(14)) {
+            toggleCellAndNeighbors(
+                grid,
+                Mathf.random(GRID_SIDE_LENGTH - 1),
+                Mathf.random(GRID_SIDE_LENGTH - 1)
+            )
+        }
+        if (grid.any { it.any(Boolean::not) }) return grid
+    }
+}
+
+private fun toggleCellAndNeighbors(grid: Array<BooleanArray>, x: Int, y: Int) {
+    val dirs = arrayOf(0 to 0, 1 to 0, -1 to 0, 0 to 1, 0 to -1)
+    for ((dx, dy) in dirs) {
+        val nx = x + dx
+        val ny = y + dy
+        if (nx in 0 until GRID_SIDE_LENGTH && ny in 0 until GRID_SIDE_LENGTH)
+            grid[ny][nx] = !grid[ny][nx]
+    }
+}
+
+private fun calcNextHintIndex(grid: Array<BooleanArray>): Int {
+    val n = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH
+    val aug = Array(n) { BooleanArray(n + 1) }
+
+    for (y in 0 until GRID_SIDE_LENGTH)
+        for (x in 0 until GRID_SIDE_LENGTH) {
+            val r = y * GRID_SIDE_LENGTH + x
+            for ((dx, dy) in arrayOf(0 to 0, 1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
+                val nx = x + dx; val ny = y + dy
+                if (nx in 0 until GRID_SIDE_LENGTH && ny in 0 until GRID_SIDE_LENGTH)
+                    aug[r][ny * GRID_SIDE_LENGTH + nx] = true
+            }
+            aug[r][n] = grid[y][x]
+        }
+
+    var row = 0
+    for (col in 0 until n) {
+        var pivot = row
+        while (pivot < n && !aug[pivot][col]) pivot++
+        if (pivot == n) continue
+        val tmp = aug[pivot]; aug[pivot] = aug[row]; aug[row] = tmp
+        for (r in 0 until n) if (r != row && aug[r][col])
+            for (c in col..n) aug[r][c] = aug[r][c] xor aug[row][c]
+        if (++row == n) break
+    }
+
+    val xVec = BooleanArray(n)
+    for (r in n - 1 downTo 0) {
+        val lead = aug[r].indexOfFirst { it }
+        if (lead == -1 || lead == n) continue
+        var rhs = aug[r][n]
+        for (k in lead + 1 until n) if (aug[r][k] && xVec[k]) rhs = rhs xor true
+        xVec[lead] = rhs
+    }
+    return xVec.indexOfFirst { it }
+}
+
+private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
+    if (choice < 0) return@registerMenu
+    val state = lightsOutGameStatesMap[player.uuid()] ?: return@registerMenu
+
+    when (choice) {
+        BTN_INDEX_REFRESH ->
+            lightsOutGameStatesMap[player.uuid()] = LightsOutGameStateData(generateRandomSolvableGrid())
+
+        BTN_INDEX_CLOSE -> {
+            Call.hideFollowUpMenu(player.con, lightsOutMenuId)
+            lightsOutGameStatesMap.remove(player.uuid()); return@registerMenu
+        }
+
+        BTN_INDEX_HINT ->
+            state.pendingHintCellIndex = calcNextHintIndex(state.lightGrid)
+
+        else -> {
+            state.pendingHintCellIndex = -1
+            toggleCellAndNeighbors(state.lightGrid, choice % GRID_SIDE_LENGTH, choice / GRID_SIDE_LENGTH)
+            state.stepCounter++
+        }
+    }
+    showLightsOutGame(player)
+}
     private val game2048States = mutableMapOf<String, Array<IntArray>>()
 
     private const val WIN_TILE = 11
     private val tileSprites = mapOf(
         0 to "\uF8F7",  // empty
-        1 to "\uF85B",  // 2
-        2 to "\uF861",  // 4
+        1 to "\uF861",  // 2
+        2 to "\uF85B",  // 4
         3 to "\uF85E",  // 8
         4 to "\uF85C",  // 16
         5 to "\uF85A",  // 32
@@ -61,7 +230,7 @@ object PluginMenus {
         7 to "\uF858",  // 128
         8 to "\uF856",  // 256
         9 to "\uF7BE",  // 512
-        10 to "\uF683", // 1024
+        10 to "\uF688", // 1024
         11 to "\uF684"  // 2048
     )
 
@@ -76,19 +245,42 @@ object PluginMenus {
             arrayOf("", fmtArrow("\uE804", canMoveDir(grid, 0, -1)), ""),
             arrayOf(fmtArrow("\uE802", canMoveDir(grid, -1, 0)), "", fmtArrow("\uE803", canMoveDir(grid, 1, 0))),
             arrayOf("", fmtArrow("\uE805", canMoveDir(grid, 0, 1)), ""),
-            arrayOf("${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}")
+            arrayOf(
+                "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}",
+                "${PluginVars.SECONDARY}${PluginVars.RESET}"
+            )
         )
 
+
+        val maxTile = grid.maxOf { row -> row.maxOrNull() ?: 0 }
+        val score = 2.0.pow(maxTile).toInt()
+
         if (!canMove(grid) && grid.all { row -> row.none { it == 0 } }) {
-            Call.followUpMenu(player.con, menu2048Id, "2048", "\n${I18nManager.get("game.defeat", player)}\n", buttons)
-            return
-        }
-        if (grid.any { row -> row.any { it >= WIN_TILE } }) {
-            Call.followUpMenu(player.con, menu2048Id, "2048", "\n${I18nManager.get("game.victory", player)}\n", buttons)
+            Call.followUpMenu(
+                player.con, menu2048Id, "2048",
+                "\n${PluginVars.WHITE}${I18nManager.get("score", player)}: $score\n\n${I18nManager.get("game.defeat", player)}\n\n${renderGrid(grid)}${PluginVars.RESET}",
+                buttons
+            )
             return
         }
 
-        Call.followUpMenu(player.con, menu2048Id, "2048", "\n${renderGrid(grid)}", buttons)
+        if (grid.any { row -> row.any { it >= WIN_TILE } }) {
+            Call.followUpMenu(
+                player.con, menu2048Id, "2048",
+                "\n${PluginVars.WHITE}${I18nManager.get("score", player)}: $score\n\n${I18nManager.get("game.victory", player)}\n\n${renderGrid(grid)}${PluginVars.RESET}",
+                buttons
+            )
+            return
+        }
+
+        Call.followUpMenu(
+            player.con,
+            menu2048Id,
+            "2048",
+            "\n${PluginVars.WHITE}${I18nManager.get("score", player)}: $score\n\n${renderGrid(grid)}${PluginVars.RESET}",
+            buttons
+        )
+
     }
 
     private fun fmtArrow(sym: String, enabled: Boolean) = if (enabled) "${PluginVars.WHITE}$sym${PluginVars.RESET}" else "${PluginVars.SECONDARY}$sym${PluginVars.RESET}"
@@ -166,12 +358,17 @@ object PluginMenus {
     private const val IDX_RIGHT = 5
     private const val IDX_DOWN = 7
     private const val IDX_CLOSE = 9
+    private const val IDX_REFRESH = 10
 
     private val menu2048Id: Int = Menus.registerMenu { player, choice ->
         if (choice < 0) return@registerMenu
         if (choice == IDX_CLOSE) {
             Call.hideFollowUpMenu(player.con, menu2048Id)
+            return@registerMenu
+        }
+        if (choice == IDX_REFRESH) {
             game2048States.remove(player.uuid())
+            show2048game(player)
             return@registerMenu
         }
         val grid = game2048States[player.uuid()] ?: return@registerMenu
@@ -1185,7 +1382,7 @@ object PluginMenus {
     fun showRevertMenu(player: Player) {
         val revertPlayers = RevertBuild.getAllPlayersWithEdits()
         val btns = mutableListOf<MenuEntry>()
-
+        if (!isCoreAdmin(player.uuid())) return
         btns.add(MenuEntry("${PluginVars.WHITE}${I18nManager.get("revert.all_players", player)}${PluginVars.RESET}") {
             MenusManage.createTextInput(
                 title = I18nManager.get("revert.input_seconds.title", player),

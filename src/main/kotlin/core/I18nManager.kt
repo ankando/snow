@@ -44,11 +44,7 @@ object I18nManager {
             ?: player?.locale()
             ?: "en"
 
-        val normalized = rawLang.replace('-', '_')
-
-        val code = normalized.split('_')[0]
+        val code = rawLang.replace('-', '_').split('_')[0]
         return if (code in supportedLanguages) code else "en"
     }
-
 }
-
