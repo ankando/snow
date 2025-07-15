@@ -60,6 +60,9 @@ object ClientCommands {
         register("players", "", "helpCmd.players") { args, player ->
             PluginMenus.showPlayersMenu(player, 1)
         }
+        register("games", "", "helpCmd.games") { args, player ->
+            PluginMenus.showGamesMenu(player)
+        }
         register("join", "", "helpCmd.join") { _, player ->
             if (player.team() != Team.derelict) {
                 Call.announce(player.con, I18nManager.get("join.joined", player))

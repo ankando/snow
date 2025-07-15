@@ -23,6 +23,169 @@ import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
 import kotlin.math.max
 
 object PluginMenus {
+    fun showGamesMenu(player: Player, page: Int = 1) {
+        val games = listOf(
+            "2048" to ::show2048game
+        )
+
+        val menu = MenusManage.createMenu<Unit>(
+            title = { p, _, _, _ ->
+                "${PluginVars.GRAY}${I18nManager.get("games.title", p)}${PluginVars.RESET}"
+            },
+            desc = { _, _, _ -> "" },
+            paged = false,
+            options = { _, _, _ ->
+                games.map { (label, action) ->
+                    MenuEntry("${PluginVars.WHITE}$label${PluginVars.RESET}") {
+                        action(player)
+                    }
+                }
+            }
+        )
+
+        menu(player, page)
+    }
+
+
+    private val game2048States = mutableMapOf<String, Array<IntArray>>()
+
+    private const val WIN_TILE = 11
+    private val tileSprites = mapOf(
+        0 to "\uF8F7",  // empty
+        1 to "\uF85B",  // 2
+        2 to "\uF861",  // 4
+        3 to "\uF85E",  // 8
+        4 to "\uF85C",  // 16
+        5 to "\uF85A",  // 32
+        6 to "\uF857",  // 64
+        7 to "\uF858",  // 128
+        8 to "\uF856",  // 256
+        9 to "\uF7BE",  // 512
+        10 to "\uF683", // 1024
+        11 to "\uF684"  // 2048
+    )
+
+    fun show2048game(player: Player) {
+        val grid = game2048States.getOrPut(player.uuid()) { Array(4) { IntArray(4) } }
+
+        if (grid.all { row -> row.all { it == 0 } }) {
+            repeat(2) { addRandomTile(grid) }
+        }
+
+        val buttons = arrayOf(
+            arrayOf("", fmtArrow("\uE804", canMoveDir(grid, 0, -1)), ""),
+            arrayOf(fmtArrow("\uE802", canMoveDir(grid, -1, 0)), "", fmtArrow("\uE803", canMoveDir(grid, 1, 0))),
+            arrayOf("", fmtArrow("\uE805", canMoveDir(grid, 0, 1)), ""),
+            arrayOf("${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}")
+        )
+
+        if (!canMove(grid) && grid.all { row -> row.none { it == 0 } }) {
+            Call.followUpMenu(player.con, menu2048Id, "2048", "\n${I18nManager.get("game.defeat", player)}\n", buttons)
+            return
+        }
+        if (grid.any { row -> row.any { it >= WIN_TILE } }) {
+            Call.followUpMenu(player.con, menu2048Id, "2048", "\n${I18nManager.get("game.victory", player)}\n", buttons)
+            return
+        }
+
+        Call.followUpMenu(player.con, menu2048Id, "2048", "\n${renderGrid(grid)}", buttons)
+    }
+
+    private fun fmtArrow(sym: String, enabled: Boolean) = if (enabled) "${PluginVars.WHITE}$sym${PluginVars.RESET}" else "${PluginVars.SECONDARY}$sym${PluginVars.RESET}"
+
+    private fun renderGrid(grid: Array<IntArray>): String = buildString {
+        grid.forEach { row ->
+            row.forEach { tile -> append(tileSprites[tile]) }
+            append('\n')
+        }
+    }
+
+    private fun moveGrid(grid: Array<IntArray>, dx: Int, dy: Int): Boolean {
+        var moved = false
+        val rangeX = if (dx > 0) 2 downTo 0 else 1..3
+        val rangeY = if (dy > 0) 2 downTo 0 else 1..3
+
+        if (dx != 0) {
+            for (y in 0..3) for (x in rangeX) moved = moved or slide(grid, x, y, dx, 0)
+        } else {
+            for (y in rangeY) for (x in 0..3) moved = moved or slide(grid, x, y, 0, dy)
+        }
+        return moved
+    }
+
+    private fun slide(grid: Array<IntArray>, x: Int, y: Int, dx: Int, dy: Int): Boolean {
+        val v = grid[y][x]
+        if (v == 0) return false
+        var cx = x
+        var cy = y
+        var moved = false
+        while (true) {
+            val nx = cx + dx
+            val ny = cy + dy
+            if (nx !in 0..3 || ny !in 0..3) break
+            val next = grid[ny][nx]
+            if (next == 0) {
+                grid[ny][nx] = v
+                grid[cy][cx] = 0
+                cx = nx; cy = ny; moved = true
+            } else if (next == v) {
+                grid[ny][nx] = v + 1
+                grid[cy][cx] = 0
+                moved = true; break
+            } else break
+        }
+        return moved
+    }
+
+    private fun addRandomTile(grid: Array<IntArray>) {
+        val empty = mutableListOf<Pair<Int, Int>>()
+        grid.forEachIndexed { y, row -> row.forEachIndexed { x, v -> if (v == 0) empty += x to y } }
+        if (empty.isNotEmpty()) {
+            val (x, y) = empty.random()
+            grid[y][x] = if (Mathf.chance(0.9)) 1 else 2
+        }
+    }
+
+    private fun canMove(grid: Array<IntArray>): Boolean {
+        for (y in 0..3) for (x in 0..3) {
+            val v = grid[y][x]
+            if (v == 0) return true
+            if (x < 3 && grid[y][x + 1] == v) return true
+            if (y < 3 && grid[y + 1][x] == v) return true
+        }
+        return false
+    }
+
+    private fun canMoveDir(grid: Array<IntArray>, dx: Int, dy: Int): Boolean {
+        val test = Array(4) { grid[it].clone() }
+        return moveGrid(test, dx, dy)
+    }
+
+    private const val IDX_UP = 1
+    private const val IDX_LEFT = 3
+    private const val IDX_RIGHT = 5
+    private const val IDX_DOWN = 7
+    private const val IDX_CLOSE = 9
+
+    private val menu2048Id: Int = Menus.registerMenu { player, choice ->
+        if (choice < 0) return@registerMenu
+        if (choice == IDX_CLOSE) {
+            Call.hideFollowUpMenu(player.con, menu2048Id)
+            game2048States.remove(player.uuid())
+            return@registerMenu
+        }
+        val grid = game2048States[player.uuid()] ?: return@registerMenu
+        val moved = when (choice) {
+            IDX_UP -> moveGrid(grid, 0, -1)
+            IDX_LEFT -> moveGrid(grid, -1, 0)
+            IDX_RIGHT -> moveGrid(grid, 1, 0)
+            IDX_DOWN -> moveGrid(grid, 0, 1)
+            else -> false
+        }
+        if (moved) addRandomTile(grid)
+        show2048game(player)
+    }
+
     private val editableBooleanRules = listOf(
         "fire",
         "onlyDepositCore",
