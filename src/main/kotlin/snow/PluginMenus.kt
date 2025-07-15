@@ -295,8 +295,14 @@ object PluginMenus {
                     }
                     ranked.take(50).forEachIndexed { i, acc ->
                         val nick = acc.account.ifBlank { I18nManager.get("rank.unknown", player) }
-                        append("${PluginVars.INFO}${i + 1}. $nick: ${acc.score}${PluginVars.RESET}\n")
+                        val numColor   = if (i < 3) PluginVars.GOLD else PluginVars.INFO
+                        val scoreColor = if (i < 3) PluginVars.GOLD else PluginVars.INFO
+
+                        append(
+                            "$numColor${i + 1}. $nick: $scoreColor${acc.score}${PluginVars.RESET}\n"
+                        )
                     }
+
                 }
             },
             paged = false,

@@ -11,6 +11,7 @@ object PluginVars {
     const val WHITE = "[#F1F1F1CC]"
     const val GRAY = "[#D0D0D0EE]"
     const val INFO = "[#E0E0E0EE]"
+    const val GOLD = "[#D7C69AEE]"
     const val SECONDARY = "[#B0B0B0DD]"
     const val ERROR = "[#A0A0A0DD]"
     const val SUCCESS = "[#BEBEBEDD]"
