@@ -65,7 +65,7 @@ object NetEvents {
         if (text.isEmpty()) return ""
 
         val clean = baseHex.removePrefix("#")
-        require(clean.length == 6) { "baseHex must be 6 hex digits" }
+        require(clean.length == 6) { "" }
 
         val r = clean.substring(0, 2).toInt(16) / 255f
         val g = clean.substring(2, 4).toInt(16) / 255f

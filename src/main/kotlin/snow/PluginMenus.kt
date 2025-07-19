@@ -884,8 +884,11 @@ object PluginMenus {
         if(Vars.state.isMenu){
             return
         }
+        if (!map.file.exists()) {
+            return
+        }
         Vars.maps.setNextMapOverride(map)
-        Events.fire(EventType.GameOverEvent(Team.get(28)))
+        Events.fire(EventType.GameOverEvent(Team.derelict))
     }
 
 
