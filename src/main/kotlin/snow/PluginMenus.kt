@@ -49,173 +49,173 @@ object PluginMenus {
         menu(player, page)
     }
 
-private data class LightsOutGameStateData(
-    val lightGrid: Array<BooleanArray>,
-    var stepCounter: Int = 0,
-    var pendingHintCellIndex: Int = -1
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
+    private data class LightsOutGameStateData(
+        val lightGrid: Array<BooleanArray>,
+        var stepCounter: Int = 0,
+        var pendingHintCellIndex: Int = -1
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
 
-        other as LightsOutGameStateData
+            other as LightsOutGameStateData
 
-        if (stepCounter != other.stepCounter) return false
-        if (pendingHintCellIndex != other.pendingHintCellIndex) return false
-        if (!lightGrid.contentDeepEquals(other.lightGrid)) return false
+            if (stepCounter != other.stepCounter) return false
+            if (pendingHintCellIndex != other.pendingHintCellIndex) return false
+            if (!lightGrid.contentDeepEquals(other.lightGrid)) return false
 
-        return true
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = stepCounter
+            result = 31 * result + pendingHintCellIndex
+            result = 31 * result + lightGrid.contentDeepHashCode()
+            return result
+        }
     }
-
-    override fun hashCode(): Int {
-        var result = stepCounter
-        result = 31 * result + pendingHintCellIndex
-        result = 31 * result + lightGrid.contentDeepHashCode()
-        return result
-    }
-}
 
     private val lightsOutGameStatesMap = mutableMapOf<String, LightsOutGameStateData>()
 
 
-private const val GRID_SIDE_LENGTH = 5
+    private const val GRID_SIDE_LENGTH = 5
 
-private const val BTN_INDEX_REFRESH = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH      // 25
-private const val BTN_INDEX_CLOSE   = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH + 1  // 26
-private const val BTN_INDEX_HINT    = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH + 2  // 27
+    private const val BTN_INDEX_REFRESH = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH      // 25
+    private const val BTN_INDEX_CLOSE   = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH + 1  // 26
+    private const val BTN_INDEX_HINT    = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH + 2  // 27
 
-private const val CHAR_LIGHT_ON  = "\uE853"
-private const val CHAR_LIGHT_OFF = "\uE86C"
+    private const val CHAR_LIGHT_ON  = "\uE853"
+    private const val CHAR_LIGHT_OFF = "\uE86C"
 
-fun showLightsOutGame(player: Player) {
-    val playerUuid = player.uuid()
-    val playerState = lightsOutGameStatesMap.getOrPut(playerUuid) {
-        LightsOutGameStateData(generateRandomSolvableGrid())
-    }
-
-    val buttonRows = Array(GRID_SIDE_LENGTH + 1) { arrayOfNulls<String>(GRID_SIDE_LENGTH) }
-
-    for (row in 0 until GRID_SIDE_LENGTH) {
-        for (col in 0 until GRID_SIDE_LENGTH) {
-            val cellIdx = row * GRID_SIDE_LENGTH + col
-            val charBase = if (playerState.lightGrid[row][col]) CHAR_LIGHT_ON else CHAR_LIGHT_OFF
-
-            buttonRows[row][col] =
-                when {
-                    cellIdx == playerState.pendingHintCellIndex ->
-                        "${PluginVars.GOLD}$charBase[]"
-                    playerState.lightGrid[row][col] ->
-                        "${PluginVars.WHITE}$charBase${PluginVars.RESET}"
-                    else ->
-                        "${PluginVars.SECONDARY}$charBase${PluginVars.RESET}"
-                }
+    fun showLightsOutGame(player: Player) {
+        val playerUuid = player.uuid()
+        val playerState = lightsOutGameStatesMap.getOrPut(playerUuid) {
+            LightsOutGameStateData(generateRandomSolvableGrid())
         }
-    }
 
-    buttonRows[GRID_SIDE_LENGTH][0] = "${PluginVars.WHITE}\uE86F${PluginVars.RESET}"
-    buttonRows[GRID_SIDE_LENGTH][1] = "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
-    buttonRows[GRID_SIDE_LENGTH][2] = "${PluginVars.WHITE}\uE88E${PluginVars.RESET}"
+        val buttonRows = Array(GRID_SIDE_LENGTH + 1) { arrayOfNulls<String>(GRID_SIDE_LENGTH) }
 
-    val description = buildString {
-        append("\n${PluginVars.WHITE}${I18nManager.get("steps", player)}: ${playerState.stepCounter}${PluginVars.RESET}\n")
-        if (playerState.lightGrid.all { it.all(Boolean::not) })
-            append("\n\n${PluginVars.WHITE}${I18nManager.get("game.victory", player)}${PluginVars.RESET}\n")
-    }
+        for (row in 0 until GRID_SIDE_LENGTH) {
+            for (col in 0 until GRID_SIDE_LENGTH) {
+                val cellIdx = row * GRID_SIDE_LENGTH + col
+                val charBase = if (playerState.lightGrid[row][col]) CHAR_LIGHT_ON else CHAR_LIGHT_OFF
 
-    Call.followUpMenu(
-        player.con,
-        lightsOutMenuId,
-        "${PluginVars.WHITE}Lights Out${PluginVars.RESET}",
-        description,
-        buttonRows
-    )
-}
-
-private fun generateRandomSolvableGrid(): Array<BooleanArray> {
-    while (true) {
-        val grid = Array(GRID_SIDE_LENGTH) { BooleanArray(GRID_SIDE_LENGTH) }
-        repeat(10 + Mathf.random(14)) {
-            toggleCellAndNeighbors(
-                grid,
-                Mathf.random(GRID_SIDE_LENGTH - 1),
-                Mathf.random(GRID_SIDE_LENGTH - 1)
-            )
-        }
-        if (grid.any { it.any(Boolean::not) }) return grid
-    }
-}
-
-private fun toggleCellAndNeighbors(grid: Array<BooleanArray>, x: Int, y: Int) {
-    val dirs = arrayOf(0 to 0, 1 to 0, -1 to 0, 0 to 1, 0 to -1)
-    for ((dx, dy) in dirs) {
-        val nx = x + dx
-        val ny = y + dy
-        if (nx in 0 until GRID_SIDE_LENGTH && ny in 0 until GRID_SIDE_LENGTH)
-            grid[ny][nx] = !grid[ny][nx]
-    }
-}
-
-private fun calcNextHintIndex(grid: Array<BooleanArray>): Int {
-    val n = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH
-    val aug = Array(n) { BooleanArray(n + 1) }
-
-    for (y in 0 until GRID_SIDE_LENGTH)
-        for (x in 0 until GRID_SIDE_LENGTH) {
-            val r = y * GRID_SIDE_LENGTH + x
-            for ((dx, dy) in arrayOf(0 to 0, 1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
-                val nx = x + dx; val ny = y + dy
-                if (nx in 0 until GRID_SIDE_LENGTH && ny in 0 until GRID_SIDE_LENGTH)
-                    aug[r][ny * GRID_SIDE_LENGTH + nx] = true
+                buttonRows[row][col] =
+                    when {
+                        cellIdx == playerState.pendingHintCellIndex ->
+                            "${PluginVars.GOLD}$charBase[]"
+                        playerState.lightGrid[row][col] ->
+                            "${PluginVars.WHITE}$charBase${PluginVars.RESET}"
+                        else ->
+                            "${PluginVars.SECONDARY}$charBase${PluginVars.RESET}"
+                    }
             }
-            aug[r][n] = grid[y][x]
         }
 
-    var row = 0
-    for (col in 0 until n) {
-        var pivot = row
-        while (pivot < n && !aug[pivot][col]) pivot++
-        if (pivot == n) continue
-        val tmp = aug[pivot]; aug[pivot] = aug[row]; aug[row] = tmp
-        for (r in 0 until n) if (r != row && aug[r][col])
-            for (c in col..n) aug[r][c] = aug[r][c] xor aug[row][c]
-        if (++row == n) break
-    }
+        buttonRows[GRID_SIDE_LENGTH][0] = "${PluginVars.WHITE}\uE86F${PluginVars.RESET}"
+        buttonRows[GRID_SIDE_LENGTH][1] = "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
+        buttonRows[GRID_SIDE_LENGTH][2] = "${PluginVars.WHITE}\uE88E${PluginVars.RESET}"
 
-    val xVec = BooleanArray(n)
-    for (r in n - 1 downTo 0) {
-        val lead = aug[r].indexOfFirst { it }
-        if (lead == -1 || lead == n) continue
-        var rhs = aug[r][n]
-        for (k in lead + 1 until n) if (aug[r][k] && xVec[k]) rhs = rhs xor true
-        xVec[lead] = rhs
-    }
-    return xVec.indexOfFirst { it }
-}
-
-private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
-    if (choice < 0) return@registerMenu
-    val state = lightsOutGameStatesMap[player.uuid()] ?: return@registerMenu
-
-    when (choice) {
-        BTN_INDEX_REFRESH ->
-            lightsOutGameStatesMap[player.uuid()] = LightsOutGameStateData(generateRandomSolvableGrid())
-
-        BTN_INDEX_CLOSE -> {
-            Call.hideFollowUpMenu(player.con, lightsOutMenuId)
-            return@registerMenu
+        val description = buildString {
+            append("\n${PluginVars.WHITE}${I18nManager.get("steps", player)}: ${playerState.stepCounter}${PluginVars.RESET}\n")
+            if (playerState.lightGrid.all { it.all(Boolean::not) })
+                append("\n\n${PluginVars.WHITE}${I18nManager.get("game.victory", player)}${PluginVars.RESET}\n")
         }
 
-        BTN_INDEX_HINT ->
-            state.pendingHintCellIndex = calcNextHintIndex(state.lightGrid)
+        Call.followUpMenu(
+            player.con,
+            lightsOutMenuId,
+            "${PluginVars.WHITE}Lights Out${PluginVars.RESET}",
+            description,
+            buttonRows
+        )
+    }
 
-        else -> {
-            state.pendingHintCellIndex = -1
-            toggleCellAndNeighbors(state.lightGrid, choice % GRID_SIDE_LENGTH, choice / GRID_SIDE_LENGTH)
-            state.stepCounter++
+    private fun generateRandomSolvableGrid(): Array<BooleanArray> {
+        while (true) {
+            val grid = Array(GRID_SIDE_LENGTH) { BooleanArray(GRID_SIDE_LENGTH) }
+            repeat(10 + Mathf.random(14)) {
+                toggleCellAndNeighbors(
+                    grid,
+                    Mathf.random(GRID_SIDE_LENGTH - 1),
+                    Mathf.random(GRID_SIDE_LENGTH - 1)
+                )
+            }
+            if (grid.any { it.any(Boolean::not) }) return grid
         }
     }
-    showLightsOutGame(player)
-}
+
+    private fun toggleCellAndNeighbors(grid: Array<BooleanArray>, x: Int, y: Int) {
+        val dirs = arrayOf(0 to 0, 1 to 0, -1 to 0, 0 to 1, 0 to -1)
+        for ((dx, dy) in dirs) {
+            val nx = x + dx
+            val ny = y + dy
+            if (nx in 0 until GRID_SIDE_LENGTH && ny in 0 until GRID_SIDE_LENGTH)
+                grid[ny][nx] = !grid[ny][nx]
+        }
+    }
+
+    private fun calcNextHintIndex(grid: Array<BooleanArray>): Int {
+        val n = GRID_SIDE_LENGTH * GRID_SIDE_LENGTH
+        val aug = Array(n) { BooleanArray(n + 1) }
+
+        for (y in 0 until GRID_SIDE_LENGTH)
+            for (x in 0 until GRID_SIDE_LENGTH) {
+                val r = y * GRID_SIDE_LENGTH + x
+                for ((dx, dy) in arrayOf(0 to 0, 1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
+                    val nx = x + dx; val ny = y + dy
+                    if (nx in 0 until GRID_SIDE_LENGTH && ny in 0 until GRID_SIDE_LENGTH)
+                        aug[r][ny * GRID_SIDE_LENGTH + nx] = true
+                }
+                aug[r][n] = grid[y][x]
+            }
+
+        var row = 0
+        for (col in 0 until n) {
+            var pivot = row
+            while (pivot < n && !aug[pivot][col]) pivot++
+            if (pivot == n) continue
+            val tmp = aug[pivot]; aug[pivot] = aug[row]; aug[row] = tmp
+            for (r in 0 until n) if (r != row && aug[r][col])
+                for (c in col..n) aug[r][c] = aug[r][c] xor aug[row][c]
+            if (++row == n) break
+        }
+
+        val xVec = BooleanArray(n)
+        for (r in n - 1 downTo 0) {
+            val lead = aug[r].indexOfFirst { it }
+            if (lead == -1 || lead == n) continue
+            var rhs = aug[r][n]
+            for (k in lead + 1 until n) if (aug[r][k] && xVec[k]) rhs = rhs xor true
+            xVec[lead] = rhs
+        }
+        return xVec.indexOfFirst { it }
+    }
+
+    private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
+        if (choice < 0) return@registerMenu
+        val state = lightsOutGameStatesMap[player.uuid()] ?: return@registerMenu
+
+        when (choice) {
+            BTN_INDEX_REFRESH ->
+                lightsOutGameStatesMap[player.uuid()] = LightsOutGameStateData(generateRandomSolvableGrid())
+
+            BTN_INDEX_CLOSE -> {
+                Call.hideFollowUpMenu(player.con, lightsOutMenuId)
+                return@registerMenu
+            }
+
+            BTN_INDEX_HINT ->
+                state.pendingHintCellIndex = calcNextHintIndex(state.lightGrid)
+
+            else -> {
+                state.pendingHintCellIndex = -1
+                toggleCellAndNeighbors(state.lightGrid, choice % GRID_SIDE_LENGTH, choice / GRID_SIDE_LENGTH)
+                state.stepCounter++
+            }
+        }
+        showLightsOutGame(player)
+    }
     private val game2048States = mutableMapOf<String, Array<IntArray>>()
 
     private const val WIN_TILE = 11
@@ -759,7 +759,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.lang", viewer)}: ${acc.lang}${PluginVars.RESET}\n")
             append(
                 "${PluginVars.SECONDARY}${I18nManager.get("playerInfo.role", viewer)}: ${
-                       if (isCoreAdmin(target.uuid())) "Admin" else "Player"
+                    if (isCoreAdmin(target.uuid())) "Admin" else "Player"
                 }${PluginVars.RESET}\n"
             )
         }
@@ -874,7 +874,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             return
         }
         Vars.maps.setNextMapOverride(map)
-        Events.fire(EventType.GameOverEvent(Team.derelict))
+        Events.fire(EventType.GameOverEvent(Team.get(28)))
     }
 
 
@@ -1459,8 +1459,8 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                 })
 
             revertPlayers.forEach { uuid ->
-                val name = Vars.netServer.admins.getInfo(uuid)?.lastName ?: uuid.take(8)
-
+                val acc = DataManager.getPlayerDataByUuid(uuid)
+                val name = acc?.account ?: uuid.take(8)
 
                 btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
                     MenusManage.createTextInput(

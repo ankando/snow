@@ -67,9 +67,9 @@ object NetEvents {
         val b = Integer.parseInt(hex.substring(4, 6), 16)
 
         val mix = 0.5
-        val nr = (r * mix + 100).toInt().coerceAtMost(255)
-        val ng = (g * mix + 100).toInt().coerceAtMost(255)
-        val nb = (b * mix + 100).toInt().coerceAtMost(255)
+        val nr = (r * mix + 120).toInt().coerceAtMost(255)
+        val ng = (g * mix + 120).toInt().coerceAtMost(255)
+        val nb = (b * mix + 120).toInt().coerceAtMost(255)
 
         return String.format("%02X%02X%02X", nr, ng, nb)
     }
