@@ -52,7 +52,6 @@ object EventManager {
             val winner = e.winner ?: return@on
             if (winner == Team.derelict || winner.cores().isEmpty) return@on
             Call.sound(Sounds.explosionbig, Vars.world.unitWidth() / 2f, Vars.world.unitHeight() / 2f, 1f)
-
             when (Vars.state.rules.mode()) {
                 Gamemode.pvp -> handlePvpGameOver(winner)
                 else         -> handleCoopGameOver(winner)

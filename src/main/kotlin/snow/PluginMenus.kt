@@ -202,7 +202,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
 
         BTN_INDEX_CLOSE -> {
             Call.hideFollowUpMenu(player.con, lightsOutMenuId)
-            lightsOutGameStatesMap.remove(player.uuid()); return@registerMenu
+            return@registerMenu
         }
 
         BTN_INDEX_HINT ->
@@ -246,9 +246,9 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             arrayOf(fmtArrow("\uE802", canMoveDir(grid, -1, 0)), "", fmtArrow("\uE803", canMoveDir(grid, 1, 0))),
             arrayOf("", fmtArrow("\uE805", canMoveDir(grid, 0, 1)), ""),
             arrayOf(
-                "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}",
-                "${PluginVars.SECONDARY}${PluginVars.RESET}"
-            )
+                "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
+            ),
+            arrayOf("${PluginVars.SECONDARY}${PluginVars.RESET}")
         )
 
 
@@ -564,7 +564,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                     }.toTypedArray()
                 }.toMutableList()
 
-            rows += arrayOf("${PluginVars.GRAY}\uE815 ${I18nManager.get("close", player)}${PluginVars.RESET}")
+            rows += arrayOf("${PluginVars.GRAY}\uE815${PluginVars.RESET}")
             Call.followUpMenu(
                 player.con,
                 blockMenuId,
@@ -587,7 +587,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                     }.toTypedArray()
                 }.toMutableList()
 
-            rows += arrayOf("${PluginVars.GRAY}\uE815 ${I18nManager.get("close", player)}${PluginVars.RESET}")
+            rows += arrayOf("${PluginVars.GRAY}\uE815${PluginVars.RESET}")
             Call.followUpMenu(
                 player.con,
                 unitMenuId,
@@ -791,16 +791,23 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                     )
                 } $page/$total${PluginVars.RESET}"
             },
-            desc = { _, _, _ -> "" },
+            desc = { _, _, _ ->
+                val current = Vars.state.map
+                "\n${PluginVars.SECONDARY}${I18nManager.get("map.current", player)}: ${PluginVars.INFO}${current.name()}${PluginVars.RESET}\n"
+            },
             options = { _, _, _ ->
+                val current = Vars.state.map
                 Vars.maps.customMaps().toList().mapIndexed { i, map ->
+                    val isCurrent = map.file.name() == current.file.name()
+                    val prefix = if (isCurrent) "${PluginVars.GOLD}\uE809 " else "${PluginVars.WHITE}\uF029"
                     MenuEntry(
-                        "${PluginVars.WHITE}\uF029${i + 1} ${map.name()}${PluginVars.RESET}"
+                        "$prefix${i + 1} ${map.name()}${PluginVars.RESET}"
                     ) { player ->
                         showMapOptionMenu(player, map)
                     }
                 }
             }
+
         )
         mapMenu(player, page)
     }
@@ -821,8 +828,23 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
         val isOk = isAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
+
+        val mapFileName = map.file.name()
+        val uploaderId = DataManager.maps[mapFileName]?.uploaderId
+        val uploaderNickname = uploaderId?.let { id ->
+            val uploaderData = DataManager.players.values().find { it.id == id }
+            val firstUuid = uploaderData?.uuids?.firstOrNull()
+            if (firstUuid != null) {
+                Vars.netServer.admins.getInfo(firstUuid)?.lastName
+            } else {
+                null
+            }
+        } ?: I18nManager.get("unknown", player)
+
+
         val desc = buildString {
-            append("\n$${PluginVars.SECONDARY}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
+            append("\n${PluginVars.SECONDARY}${I18nManager.get("mapInfo.uploader", player)}: $uploaderNickname${PluginVars.RESET}\n")
+            append("\n${PluginVars.SECONDARY}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
             append("\n${PluginVars.GRAY}${map.description()}${PluginVars.RESET}\n")
         }
 
@@ -865,22 +887,13 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
 
                             menu(p)
                         }
-
-
-
                     }
                 }
             }
         }
 
-
         val btnChange = MenuEntry(
-            "${if (isOk) strong else weak}${
-                I18nManager.get(
-                    "mapInfo.change",
-                    player
-                )
-            }${PluginVars.RESET}"
+            "${if (isOk) strong else weak}${I18nManager.get("mapInfo.change", player)}${PluginVars.RESET}"
         ) {
             if (isOk) {
                 showConfirmMenu(player) {
@@ -899,12 +912,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
         }
 
         val btnNext = MenuEntry(
-            "${if (isOk) strong else weak}${
-                I18nManager.get(
-                    "mapInfo.next",
-                    player
-                )
-            }${PluginVars.RESET}"
+            "${if (isOk) strong else weak}${I18nManager.get("mapInfo.next", player)}${PluginVars.RESET}"
         ) {
             if (isOk) {
                 showConfirmMenu(player) {
@@ -922,7 +930,39 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             }
         }
 
-        val rows = listOf(btnVote, btnChange, btnNext)
+        val canDelete = isAdmin || uploaderId == DataManager.getIdByUuid(player.uuid())
+
+        val btnDelete = MenuEntry(
+            "${if (canDelete) strong else weak}${I18nManager.get("mapInfo.delete", player)}${PluginVars.RESET}"
+        ) {
+            if (!canDelete) {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}"
+                )
+                return@MenuEntry
+            }
+
+            showConfirmMenu(player) {
+                val deleted = map.file.delete()
+                if (deleted) {
+                    DataManager.maps.remove(mapFileName)
+                    DataManager.requestSave()
+                    Vars.maps.reload()
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${I18nManager.get("mapInfo.deleted", player)}${PluginVars.RESET}"
+                    )
+                } else {
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.ERROR}${I18nManager.get("mapInfo.delete_failed", player)}${PluginVars.RESET}"
+                    )
+                }
+            }
+        }
+
+        val rows = listOf(btnVote, btnChange, btnNext, btnDelete)
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
@@ -931,6 +971,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             options = { _, _, _ -> rows }
         )(player, 1)
     }
+
 
     fun showLanguageMenu(player: Player) {
         val acc = DataManager.getPlayerDataByUuid(player.uuid()) ?: return
@@ -1108,41 +1149,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
     }
 
 
-    fun showMapInfoMenu(player: Player, map: mindustry.maps.Map) {
-        val desc = buildString {
-            append(
-                "\n${PluginVars.WHITE}${(Vars.state.tick / 60f / 60f).toInt()} ${
-                    I18nManager.get(
-                        "minute",
-                        player
-                    )
-                }${PluginVars.RESET}\n"
-            )
-            append("\n")
-            append("${PluginVars.WHITE}${map.name()}${PluginVars.RESET}\n")
-            append("\n")
-            if (!map.author().isNullOrBlank()) {
-                append("${PluginVars.SECONDARY}${map.author()}${PluginVars.RESET}\n")
-            }
-            append("\n")
-            append("${PluginVars.GRAY}${map.description()}${PluginVars.RESET}\n")
-        }
 
-        MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ ->
-                "${PluginVars.GRAY}${
-                    I18nManager.get(
-                        "mapInfo.title",
-                        player
-                    )
-                }${PluginVars.RESET}"
-            },
-            paged = false,
-            desc = { _, _, _ -> desc },
-            options = { _, _, _ -> listOf() }
-        )(player, 1)
-
-    }
 
     private val tempTeamChoices = mutableMapOf<String, MutableList<Team>>()
     fun showTeamMenu(player: Player) {
@@ -1381,8 +1388,8 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
         })
 
         revertPlayers.forEach { uuid ->
-            val acc = DataManager.getPlayerDataByUuid(uuid)
-            val name = acc?.account ?: uuid.take(8)
+            val name = Vars.netServer.admins.getInfo(uuid)?.lastName ?: uuid.take(8)
+
 
             btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
                 MenusManage.createTextInput(

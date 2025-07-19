@@ -73,9 +73,6 @@ object ClientCommands {
         register("rules", "", "helpCmd.rules") { _, player ->
             PluginMenus.showRulesMenu(player)
         }
-        register("info", "", "helpCmd.info") { _, player ->
-            PluginMenus.showMapInfoMenu(player, Vars.state.map)
-        }
         register("upload", "", "helpCmd.upload") { _, player ->
             PluginMenus.showUploadMapMenu(player)
         }

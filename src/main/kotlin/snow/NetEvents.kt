@@ -8,6 +8,7 @@ import arc.util.Time
 import mindustry.Vars
 import mindustry.core.Version
 import mindustry.game.EventType
+import mindustry.game.Team
 import mindustry.gen.AdminRequestCallPacket
 import mindustry.gen.Call
 import mindustry.gen.Groups
@@ -36,33 +37,67 @@ object NetEvents {
         return null as String?
     }
 
+    private const val MAX_CHAT_LEN = 256
+    private val ctrlCharRegex = Regex("""[\u0000-\u001F]""")   // ISO 控制字符
+
     private fun broadcast(sender: Player, raw: String) {
-        val plain = Strings.stripColors(raw)
-        val prefix = "${PluginVars.INFO}${sender.name()}${PluginVars.RESET}"
-        val local = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
+        var plain = Strings.stripColors(raw).trim()
+
+        if (plain.isBlank()) return
+        if (plain.length > MAX_CHAT_LEN) plain = plain.take(MAX_CHAT_LEN)
+        if (ctrlCharRegex.containsMatchIn(plain)) return
+
+        val useTeamColor = Vars.state.rules.pvp &&
+                sender.team() != Team.derelict &&
+                sender.team().data().hasCore()
+
+        val coloredName = if (useTeamColor) {
+            val rgb = sender.team().color.toString().take(6).uppercase()
+            "[#${rgb}DD]${sender.name()}${PluginVars.RESET}"
+        } else {
+            "${PluginVars.INFO}${sender.name()}${PluginVars.RESET}"
+        }
+
+        val prefix = coloredName
+        val local  = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
 
         sender.sendMessage(local)
 
-        Groups.player.each { recipient ->
-            if (recipient === sender) return@each
+        val langGroups = mutableMapOf<String, MutableList<Player>>()
+        Groups.player.each { p ->
+            if (p !== sender) {
+                val lang = DataManager.getPlayerDataByUuid(p.uuid())?.lang ?: p.locale()
+                langGroups.getOrPut(lang) { mutableListOf() }.add(p)
+            }
+        }
 
-            val lang = DataManager.getPlayerDataByUuid(recipient.uuid())?.lang ?: recipient.locale()
-            val target = recipient
+        langGroups.forEach { (lang, players) ->
+            if (lang.equals(sender.locale(), true) || lang == "auto") {
+                players.forEach { it.sendMessage(local) }
+                return@forEach
+            }
 
-            Translator.translate(plain, "auto", lang,
+            Translator.translate(
+                plain, "auto", lang,
                 onResult = { translated ->
-                    val body = if (translated != plain)
-                        "$plain ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
-                    else
-                        plain
-                    target.sendMessage("$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}")
+                    Core.app.post {
+                        val body = if (translated != plain)
+                            "$plain ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                        else
+                            plain
+                        val msg = "$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}"
+                        players.forEach { it.sendMessage(msg) }
+                    }
                 },
                 onError = {
-                    target.sendMessage(local)
+                    Core.app.post { players.forEach { it.sendMessage(local) } }
                 }
             )
         }
     }
+
+
+
 
 
     private const val BAN_MS = 30 * 60_000L

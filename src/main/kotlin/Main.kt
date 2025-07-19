@@ -22,7 +22,6 @@ import kotlin.math.max
 
 class Main : Plugin() {
 
-    private val lastDeposit = mutableMapOf<String, Long>()
     private val dbFile = Vars.saveDirectory.child("GeoLite2-Country.mmdb")
     private val isoLang = mapOf(
         "CN" to "zh", "TW" to "zh", "HK" to "zh", "MO" to "zh", "SG" to "zh", "MY" to "zh",
@@ -119,7 +118,6 @@ class Main : Plugin() {
     private fun actionFilter(action: Administration.PlayerAction?): Boolean {
         val player = action?.player ?: return false
         val uuid = player.uuid()
-        val now = Time.nanos()
 
         if (player.unit().let { it == null || it.dead() }) return false
         if (!PermissionManager.isNormal(uuid)) return false
@@ -128,17 +126,6 @@ class Main : Plugin() {
 
         if (action.type == ActionType.breakBlock) action.tile?.let { RevertBuild.recordRemove(player, it) }
 
-        if (action.type == ActionType.depositItem) {
-            val last = lastDeposit[uuid]
-            if (last != null && now - last < 600_000_000L) {
-                DataManager.getPlayerDataByUuid(uuid)?.let { acc ->
-                    DataManager.updatePlayer(acc.id) { it.banUntil = Time.millis() + 5_000L }
-                }
-                Call.announce(player.con, I18nManager.get("autofill", player))
-                return false
-            }
-            lastDeposit[uuid] = now
-        }
         return true
     }
 

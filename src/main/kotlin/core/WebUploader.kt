@@ -50,20 +50,19 @@ object WebUploader {
             }
 
             return when (session.method) {
-                Method.GET -> handleGet(session, uuid, isAdmin, token)
+                Method.GET -> handleGet(session, token)
                 Method.POST -> handlePost(session, uuid, isAdmin)
                 else -> newFixedLengthResponse("Unsupported")
             }
         }
-
-        private fun handleGet(s: IHTTPSession, uuid: String, isAdmin: Boolean, token: String?): Response {
+        private fun handleGet(s: IHTTPSession, token: String?): Response {
             val file = s.parameters["file"]?.firstOrNull()
             return when (s.uri) {
                 "/download" -> sendFile(file)
-                "/delete" -> deleteFile(file, uuid, isAdmin)
-                else -> page(uuid, isAdmin, token)
+                else -> page(token)
             }
         }
+
 
         private fun handlePost(s: IHTTPSession, uuid: String, isAdmin: Boolean): Response {
             val files = HashMap<String?, String?>()
@@ -93,7 +92,7 @@ object WebUploader {
             }
 
             Vars.maps.reload()
-            return ok("uploaded")
+            return html("uploaded")
         }
 
 
@@ -106,25 +105,8 @@ object WebUploader {
             }
         }
 
-        private fun deleteFile(name: String?, uuid: String, isAdmin: Boolean): Response {
-            if (name.isNullOrBlank()) return bad("no file")
-            val f = mapDir.child(name)
-            if (!f.exists()) return notFound()
-            val mapData = DataManager.maps[name]
-            val uploaderId = DataManager.getIdByUuid(uuid)
 
-            if (mapData?.uploaderId != uploaderId && !isAdmin) {
-                return bad("denied")
-            }
-
-            f.delete()
-            DataManager.maps.remove(name)
-            DataManager.requestSave()
-            Vars.maps.reload()
-            return ok("deleted")
-        }
-
-        private fun page(uuid: String, isAdmin: Boolean, token: String?): Response {
+        private fun page(token: String?): Response {
             val tok = "&token=${token ?: ""}"
             val sb = StringBuilder()
 
@@ -183,14 +165,8 @@ object WebUploader {
 
             Vars.maps.customMaps().forEach { m ->
                 val fn = m.file.name()
-                val mapData = DataManager.maps[fn]
                 sb.append("<li><a href='/download?file=$fn$tok'>$fn</a> — ")
                     .append(m.name())
-                val uploaderId = mapData?.uploaderId
-                val currentPlayerId = DataManager.getIdByUuid(uuid)
-                if (uploaderId == currentPlayerId || isAdmin) {
-                    sb.append(" <a style=\"color:gray\" href='/delete?file=$fn$tok'>delete</a>")
-                }
                 sb.append("</li>")
             }
 
@@ -206,7 +182,6 @@ object WebUploader {
         }
 
         private fun html(s: String) = newFixedLengthResponse(s)
-        private fun ok(s: String) = html(s)
         private fun bad(s: String) = newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, s)
         private fun forbidden() = newFixedLengthResponse(Response.Status.FORBIDDEN, MIME_PLAINTEXT, "forbidden")
         private fun notFound() = newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "not found")
