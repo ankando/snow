@@ -10,7 +10,6 @@ import mindustry.core.NetServer
 import mindustry.core.Version
 import mindustry.game.Team
 import mindustry.gen.AdminRequestCallPacket
-import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
 import mindustry.mod.Plugin
@@ -19,7 +18,6 @@ import mindustry.net.Administration.ActionType
 import mindustry.net.Packets
 import plugin.core.*
 import plugin.snow.*
-import plugin.snow.PluginMenus.showTeamMenu
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -114,11 +112,9 @@ class Main : Plugin() {
         player == null -> Vars.state.rules.defaultTeam
         !PermissionManager.isNormal(player.uuid()) -> Team.derelict
         !Vars.state.rules.pvp -> Vars.state.rules.defaultTeam
-        else -> PlayerTeamManager.getTeam(player.uuid())?.also {
-            if (!it.data().hasCore() && it != Team.derelict)
-                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("team.lost", player)}${PluginVars.RESET}")
-        } ?: run { showTeamMenu(player); Team.derelict }
+        else -> PlayerTeamManager.getTeam(player.uuid()) ?: Team.derelict
     }
+
 
     private fun actionFilter(action: Administration.PlayerAction?): Boolean {
         val player = action?.player ?: return false
@@ -141,7 +137,7 @@ class Main : Plugin() {
             else -> null
         }
         key?.let {
-            return@InvalidCommandHandler "${PluginVars.WARN}${I18nManager.get(it, player)} ${PluginVars.INFO}${res.command.text} ${res.command.paramText}${PluginVars.RESET}"
+            return@InvalidCommandHandler "${PluginVars.WARN} $it ${PluginVars.INFO}${res.command.text} ${res.command.paramText}${PluginVars.RESET}"
         }
         val hint = Vars.netServer.clientCommands.commandList
             .minByOrNull { Strings.levenshtein(it.text, res.runCommand) }

@@ -830,7 +830,11 @@ object PluginMenus {
             }(viewer)
         }
 
-        val rows = listOf(btnPm, btnVoteKick, btnBan)
+        val rows = mutableListOf(btnPm, btnVoteKick)
+
+        if (canSet) {
+            rows += btnBan
+        }
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("playerInfo.title", viewer)}${PluginVars.RESET}" },
             paged = false,
@@ -849,23 +853,28 @@ object PluginMenus {
                     )
                 } $page/$total${PluginVars.RESET}"
             },
-            desc = { _, _, _ ->
-                val current = Vars.state.map
-                "\n${PluginVars.SECONDARY}${I18nManager.get("map.current", player)}: ${PluginVars.INFO}${current.name()}${PluginVars.RESET}\n"
-            },
+            desc = { _, _, _ -> "" },
             options = { _, _, _ ->
                 val current = Vars.state.map
-                Vars.maps.customMaps().toList().mapIndexed { i, map ->
+                val maps = Vars.maps.customMaps().toList()
+
+                val sortedMaps = maps.sortedWith(compareByDescending { it.file.name() == current.file.name() })
+
+                var displayIndex = 1
+
+                sortedMaps.map { map ->
                     val isCurrent = map.file.name() == current.file.name()
                     val prefix = if (isCurrent) "${PluginVars.GOLD}\uE809 " else "${PluginVars.WHITE}\uF029"
-                    MenuEntry(
-                        "$prefix${i + 1} ${map.name()}${PluginVars.RESET}"
-                    ) { player ->
+                    val label = if (isCurrent) {
+                        "$prefix${map.name()}${PluginVars.RESET}"
+                    } else {
+                        "$prefix${displayIndex++} ${map.name()}${PluginVars.RESET}"
+                    }
+                    MenuEntry(label) {
                         showMapOptionMenu(player, map)
                     }
                 }
             }
-
         )
         mapMenu(player, page)
     }
@@ -889,19 +898,14 @@ object PluginMenus {
 
         val mapFileName = map.file.name()
         val uploaderId = DataManager.maps[mapFileName]?.uploaderId
-        val uploaderNickname = uploaderId?.let { id ->
+        val uploaderName = uploaderId?.let { id ->
             val uploaderData = DataManager.players.values().find { it.id == id }
-            val firstUuid = uploaderData?.uuids?.firstOrNull()
-            if (firstUuid != null) {
-                Vars.netServer.admins.getInfo(firstUuid)?.lastName
-            } else {
-                null
-            }
+            uploaderData?.account
         } ?: I18nManager.get("unknown", player)
 
 
         val desc = buildString {
-            append("\n${PluginVars.SECONDARY}${I18nManager.get("mapInfo.uploader", player)}: $uploaderNickname${PluginVars.RESET}\n")
+            append("\n${PluginVars.SECONDARY}${I18nManager.get("mapInfo.uploader", player)}: $uploaderName${PluginVars.RESET}\n")
             append("\n${PluginVars.SECONDARY}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
             append("\n${PluginVars.GRAY}${map.description()}${PluginVars.RESET}\n")
         }
@@ -1020,7 +1024,14 @@ object PluginMenus {
             }
         }
 
-        val rows = listOf(btnVote, btnChange, btnNext, btnDelete)
+        val rows = mutableListOf(btnVote)
+
+        if (isAdmin) {
+            rows += btnChange
+            rows += btnNext
+            rows += btnDelete
+        }
+
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
@@ -1277,6 +1288,8 @@ object PluginMenus {
 
     private fun onMenuChoose(player: Player, choice: Int) {
         if (choice < 0) return
+        val currentTeam = player.team()
+        if (currentTeam != Team.derelict && currentTeam.data().hasCore()) return
 
         val teams = tempTeamChoices[player.uuid()]?.toList()?.toMutableList()
         if (teams.isNullOrEmpty()) return

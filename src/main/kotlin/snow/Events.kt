@@ -1,7 +1,6 @@
 package plugin.snow
 
 import arc.Events
-import arc.util.Interval
 import mindustry.Vars
 import mindustry.game.EventType.*
 import mindustry.game.Gamemode
@@ -11,6 +10,7 @@ import mindustry.gen.Groups
 import mindustry.gen.Sounds
 import plugin.core.*
 import plugin.snow.PluginMenus.showAuthMenu
+import plugin.snow.PluginMenus.showTeamMenu
 import kotlin.math.max
 
 object EventManager {
@@ -28,8 +28,22 @@ object EventManager {
 
 
         Events.on(PlayerJoin::class.java) { e ->
-            DataManager.getPlayerDataByUuid(e.player.uuid()) ?: showAuthMenu(e.player)
+            val player = e.player
+
+            val pData = DataManager.getPlayerDataByUuid(player.uuid())
+            if (pData == null) {
+                showAuthMenu(player)
+                return@on
+            }
         }
+
+        Events.on(PlayerConnectionConfirmed::class.java) { e ->
+            val player = e.player
+            if (Vars.state.rules.pvp && (player.team() == null || player.team() == Team.derelict)) {
+                showTeamMenu(player)
+            }
+        }
+
 
         Events.on(PlayerLeave::class.java) { e ->
             val uuid = e.player.uuid()
