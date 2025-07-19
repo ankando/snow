@@ -367,8 +367,10 @@ object PluginMenus {
             return@registerMenu
         }
         if (choice == IDX_REFRESH) {
-            game2048States.remove(player.uuid())
-            show2048game(player)
+            showConfirmMenu(player) {
+                game2048States.remove(player.uuid())
+                show2048game(player)
+            }
             return@registerMenu
         }
         val grid = game2048States[player.uuid()] ?: return@registerMenu
