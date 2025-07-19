@@ -38,64 +38,89 @@ object NetEvents {
     }
 
     private const val MAX_CHAT_LEN = 256
-    private val ctrlCharRegex = Regex("""[\u0000-\u001F]""")   // ISO 控制字符
+    private val ctrlCharRegex = Regex("""[\u0000-\u001F]""")
 
-    private fun broadcast(sender: Player, raw: String) {
-        var plain = Strings.stripColors(raw).trim()
+    fun broadcast(sender: Player, raw: String) {
+        val plain = Strings.stripColors(raw).trim()
+        if (plain.isBlank() || ctrlCharRegex.containsMatchIn(plain)) return
 
-        if (plain.isBlank()) return
-        if (plain.length > MAX_CHAT_LEN) plain = plain.take(MAX_CHAT_LEN)
-        if (ctrlCharRegex.containsMatchIn(plain)) return
-
-        val useTeamColor = Vars.state.rules.pvp &&
-                sender.team() != Team.derelict &&
-                sender.team().data().hasCore()
-
-        val coloredName = if (useTeamColor) {
-            val rgb = sender.team().color.toString().take(6).uppercase()
-            "[#${rgb}DD]${sender.name()}${PluginVars.RESET}"
-        } else {
-            "${PluginVars.INFO}${sender.name()}${PluginVars.RESET}"
-        }
-
-        val prefix = coloredName
-        val local  = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
+        val limited = plain.take(MAX_CHAT_LEN)
+        val prefix = buildChatPrefix(sender)
+        val local = "$prefix: ${PluginVars.GRAY}$limited${PluginVars.RESET}"
 
         sender.sendMessage(local)
 
-        val langGroups = mutableMapOf<String, MutableList<Player>>()
-        Groups.player.each { p ->
-            if (p !== sender) {
-                val lang = DataManager.getPlayerDataByUuid(p.uuid())?.lang ?: p.locale()
-                langGroups.getOrPut(lang) { mutableListOf() }.add(p)
-            }
-        }
+        val langGroups = groupPlayersByLang(sender)
 
         langGroups.forEach { (lang, players) ->
-            if (lang.equals(sender.locale(), true) || lang == "auto") {
+            if (lang == "auto" || lang.equals(sender.locale(), true)) {
                 players.forEach { it.sendMessage(local) }
-                return@forEach
+            } else {
+                sendTranslatedBroadcast(limited, prefix, lang, players, fallback = local)
             }
-
-            Translator.translate(
-                plain, "auto", lang,
-                onResult = { translated ->
-                    Core.app.post {
-                        val body = if (translated != plain)
-                            "$plain ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
-                        else
-                            plain
-                        val msg = "$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}"
-                        players.forEach { it.sendMessage(msg) }
-                    }
-                },
-                onError = {
-                    Core.app.post { players.forEach { it.sendMessage(local) } }
-                }
-            )
         }
     }
 
+    private fun mixWithGray(hex: String): String {
+        val r = Integer.parseInt(hex.substring(0, 2), 16)
+        val g = Integer.parseInt(hex.substring(2, 4), 16)
+        val b = Integer.parseInt(hex.substring(4, 6), 16)
+
+        val mix = 0.5
+        val nr = (r * mix + 100).toInt().coerceAtMost(255)
+        val ng = (g * mix + 100).toInt().coerceAtMost(255)
+        val nb = (b * mix + 100).toInt().coerceAtMost(255)
+
+        return String.format("%02X%02X%02X", nr, ng, nb)
+    }
+
+    private fun buildChatPrefix(player: Player): String {
+        val useTeamColor = Vars.state.rules.pvp &&
+                player.team() != Team.derelict &&
+                player.team().data().hasCore()
+        return if (useTeamColor) {
+            val rgb = player.team().color.toString().take(6).uppercase()
+            val soft = mixWithGray(rgb)
+            "[#${soft}]${player.name()}${PluginVars.RESET}"
+        } else {
+            "${PluginVars.INFO}${player.name()}${PluginVars.RESET}"
+        }
+    }
+
+    private fun groupPlayersByLang(exclude: Player): Map<String, List<Player>> {
+        val groups = mutableMapOf<String, MutableList<Player>>()
+        Groups.player.each { p ->
+            if (p !== exclude) {
+                val lang = DataManager.getPlayerDataByUuid(p.uuid())?.lang ?: p.locale()
+                groups.getOrPut(lang) { mutableListOf() }.add(p)
+            }
+        }
+        return groups
+    }
+
+    private fun sendTranslatedBroadcast(
+        text: String,
+        prefix: String,
+        lang: String,
+        players: List<Player>,
+        fallback: String
+    ) {
+        Translator.translate(
+            text, "auto", lang,
+            onResult = { translated ->
+                Core.app.post {
+                    val body = if (translated != text)
+                        "$text ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                    else text
+                    val msg = "$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}"
+                    players.forEach { it.sendMessage(msg) }
+                }
+            },
+            onError = {
+                Core.app.post { players.forEach { it.sendMessage(fallback) } }
+            }
+        )
+    }
 
 
 

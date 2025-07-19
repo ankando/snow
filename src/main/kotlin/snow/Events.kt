@@ -15,7 +15,6 @@ import kotlin.math.max
 
 object EventManager {
 
-    private val ticks = Interval()
     private val usedMaps = mutableSetOf<String>()
     private val modeTags = mapOf(
         "pvp" to Gamemode.pvp,
@@ -27,12 +26,6 @@ object EventManager {
 
     fun init() {
 
-        Events.run(Trigger.update) {
-            if (Vars.state.isGame && ticks.get(300f)) {
-                VoteManager.endVotes()
-                if (DataManager.needSave) DataManager.saveAll()
-            }
-        }
 
         Events.on(PlayerJoin::class.java) { e ->
             DataManager.getPlayerDataByUuid(e.player.uuid()) ?: showAuthMenu(e.player)

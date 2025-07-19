@@ -1,13 +1,18 @@
 package plugin
 
 import arc.Core
-import arc.util.*
+import arc.util.CommandHandler
+import arc.util.Reflect
+import arc.util.Strings
 import com.maxmind.geoip2.DatabaseReader
 import mindustry.Vars
 import mindustry.core.NetServer
 import mindustry.core.Version
 import mindustry.game.Team
-import mindustry.gen.*
+import mindustry.gen.AdminRequestCallPacket
+import mindustry.gen.Call
+import mindustry.gen.Groups
+import mindustry.gen.Player
 import mindustry.mod.Plugin
 import mindustry.net.Administration
 import mindustry.net.Administration.ActionType
@@ -56,7 +61,7 @@ class Main : Plugin() {
         EventManager.init()
         I18nManager.init()
         WebUploader.init()
-
+        TimerManager.init()
         setupDiscovery()
         Vars.netServer.assigner = NetServer.TeamAssigner { player, _ -> assignTeam(player) }
         Vars.netServer.invalidHandler = invalidCommandHandler

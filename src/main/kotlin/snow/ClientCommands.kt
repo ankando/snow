@@ -2,7 +2,6 @@ package plugin.snow
 
 import arc.util.CommandHandler
 import arc.util.Time
-import mindustry.Vars
 import mindustry.Vars.netServer
 import mindustry.game.Team
 import mindustry.gen.Call
@@ -157,47 +156,6 @@ object ClientCommands {
                 }, {
                     receiver.sendMessage(formatted)
                 })
-            }
-        }
-        register("logout", "[all]", "helpCmd.logout") { args, player ->
-            val uuid = player.uuid()
-            val acc = DataManager.getPlayerDataByUuid(uuid)
-            val team = PlayerTeamManager.getTeam(uuid)
-            if (acc == null) {
-                Call.announce(
-                    player.con,
-                    "${PluginVars.WARN}${I18nManager.get("logout.not_logged_in", player)}${PluginVars.RESET}"
-                )
-                return@register
-            }
-
-            if (acc.isLock) {
-                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("isLock", player)}${PluginVars.RESET}")
-                return@register
-            }
-            if (Vars.state.rules.pvp && team != null) {
-                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("inPvP", player)}${PluginVars.RESET}")
-                return@register
-            }
-            showConfirmMenu(player) {
-                if (args.isNotEmpty() && args[0].equals("all", ignoreCase = true)) {
-                    acc.uuids.clear()
-                    player.clearUnit()
-                    DataManager.requestSave()
-                    Call.announce(
-                        player.con,
-                        "${PluginVars.INFO}${I18nManager.get("logout.all", player)}${PluginVars.RESET}"
-                    )
-                } else {
-                    acc.uuids.remove(uuid)
-                    player.clearUnit()
-                    DataManager.requestSave()
-                    Call.announce(
-                        player.con,
-                        "${PluginVars.INFO}${I18nManager.get("logout.success", player)}${PluginVars.RESET}"
-                    )
-                    player.kick("", 0)
-                }
             }
         }
 

@@ -438,7 +438,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             }
             Vars.state.rules.setRule(rule, newValue)
             Call.setRules(Vars.state.rules)
-            Call.announce(p.con, "${PluginVars.GRAY}${p.plainName()} set $rule to $newValue")
+            Call.announce("${PluginVars.GRAY}${p.plainName()} \uE87C $rule: $newValue")
             showRulesMenu(p)
         }(player)
     }
@@ -475,6 +475,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                     if (editableBooleanRules.contains(rule)) {
                         val cur = getRuleValue(rule) as? Boolean ?: return@verifyPermissionLevel
                         Vars.state.rules.setRule(rule, !cur)
+                        Call.announce("${PluginVars.GRAY}${p.plainName()} \uE87C $rule: ${!cur}")
                         Call.setRules(Vars.state.rules)
                         showRulesMenu(player)
                     } else if (editableFloatRules.contains(rule)) {
@@ -614,7 +615,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
                     .map { cmd ->
                         val descKey = "helpCmd.${cmd.text}"
                         val desc = I18nManager.get(descKey, p)
-                        MenuEntry("${PluginVars.WHITE}$desc${PluginVars.RESET}"
+                        MenuEntry("${PluginVars.INFO}$desc${PluginVars.RESET}"
                         ) { player ->
                             NetClient.sendChatMessage(player, "/${cmd.text}")
                         }
@@ -671,6 +672,61 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
         rankMenu(player, 1)
     }
 
+    fun showLogoutMenu(player: Player) {
+        val uuid = player.uuid()
+        val acc = DataManager.getPlayerDataByUuid(uuid)
+        val team = PlayerTeamManager.getTeam(uuid)
+
+        if (acc == null) {
+            Call.announce(
+                player.con,
+                "${PluginVars.WARN}${I18nManager.get("logout.not_logged_in", player)}${PluginVars.RESET}"
+            )
+            return
+        }
+
+        if (acc.isLock) {
+            Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("isLock", player)}${PluginVars.RESET}")
+            return
+        }
+
+        if (Vars.state.rules.pvp && team != null) {
+            Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("inPvP", player)}${PluginVars.RESET}")
+            return
+        }
+
+        val btnLogout = MenuEntry("${PluginVars.WHITE}${I18nManager.get("logout.button.current", player)}${PluginVars.RESET}") {
+            showConfirmMenu(player) {
+                acc.uuids.remove(uuid)
+                player.clearUnit()
+                DataManager.requestSave()
+                Call.announce(
+                    player.con,
+                    "${PluginVars.INFO}${I18nManager.get("logout.success", player)}${PluginVars.RESET}"
+                )
+                player.kick("", 0)
+            }
+        }
+
+        val btnLogoutAll = MenuEntry("${PluginVars.WHITE}${I18nManager.get("logout.button.all", player)}${PluginVars.RESET}") {
+            showConfirmMenu(player) {
+                acc.uuids.clear()
+                player.clearUnit()
+                DataManager.requestSave()
+                Call.announce(
+                    player.con,
+                    "${PluginVars.INFO}${I18nManager.get("logout.all", player)}${PluginVars.RESET}"
+                )
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("logout.title", player)}${PluginVars.RESET}" },
+            paged = false,
+            desc = { _, _, _ -> "" },
+            options = { _, _, _ -> listOf(btnLogout, btnLogoutAll) }
+        )(player, 1)
+    }
 
     fun showPlayersMenu(player: Player, page: Int = 1) {
         val playersMenu = MenusManage.createMenu<Unit>(
@@ -1026,6 +1082,9 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
 
         val i18nTrue = I18nManager.get("common.true", player)
         val i18nFalse = I18nManager.get("common.false", player)
+        val btnLogout = MenuEntry("${strong}${I18nManager.get("logout.title", player)}${PluginVars.RESET}") {
+            showLogoutMenu(player)
+        }
 
         val btnUsername = MenuEntry("${strong}${I18nManager.get("profile.username", player)}${PluginVars.RESET}") {
             MenusManage.createTextInput(
@@ -1095,7 +1154,6 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             }(player)
         }
 
-
         val btnLang = MenuEntry("${strong}${I18nManager.get("profile.language", player)}: ${weak}${DataManager.getPlayerDataByUuid(player.uuid())?.lang}${PluginVars.RESET}") {
             showLanguageMenu(player)
         }
@@ -1136,7 +1194,7 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
             )
         }
 
-        val rows = listOf(btnUsername, btnPassword, btnLang, btnLock, btnAdmin)
+        val rows = listOf(btnLogout, btnUsername, btnPassword, btnLang, btnLock, btnAdmin)
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ ->
@@ -1360,69 +1418,100 @@ private val lightsOutMenuId:Int = Menus.registerMenu { player, choice ->
 
 
     fun showRevertMenu(player: Player) {
-        val revertPlayers = RevertBuild.getAllPlayersWithEdits()
-        val btns = mutableListOf<MenuEntry>()
-        if (!isCoreAdmin(player.uuid())) return
-        btns.add(MenuEntry("${PluginVars.WHITE}${I18nManager.get("revert.all_players", player)}${PluginVars.RESET}") {
-            MenusManage.createTextInput(
-                title = I18nManager.get("revert.input_seconds.title", player),
-                desc = I18nManager.get("revert.input_seconds.desc", player),
-                isNum = true,
-                placeholder = "180"
-            ) { _, input ->
-                val seconds = input.toIntOrNull()
-                if (seconds == null || seconds < 1) {
-                    Call.announce(
-                        player.con,
-                        "${PluginVars.WARN}${I18nManager.get("revert.invalid_input", player)}${PluginVars.RESET}"
-                    )
-                    return@createTextInput
-                }
+        verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
+            val revertPlayers = RevertBuild.getAllPlayersWithEdits()
+            val btns = mutableListOf<MenuEntry>()
+            btns.add(
+                MenuEntry(
+                    "${PluginVars.WHITE}${
+                        I18nManager.get(
+                            "revert.all_players",
+                            player
+                        )
+                    }${PluginVars.RESET}"
+                ) {
+                    MenusManage.createTextInput(
+                        title = I18nManager.get("revert.input_seconds.title", player),
+                        desc = I18nManager.get("revert.input_seconds.desc", player),
+                        isNum = true,
+                        placeholder = "180"
+                    ) { _, input ->
+                        val seconds = input.toIntOrNull()
+                        if (seconds == null || seconds < 1) {
+                            Call.announce(
+                                player.con,
+                                "${PluginVars.WARN}${
+                                    I18nManager.get(
+                                        "revert.invalid_input",
+                                        player
+                                    )
+                                }${PluginVars.RESET}"
+                            )
+                            return@createTextInput
+                        }
 
-                RevertBuild.restoreAllPlayersEditsWithinSeconds(seconds)
-                Call.announce(
-                    player.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("revert.all_success", player)}${PluginVars.RESET}"
-                )
-            }(player)
-        })
-
-        revertPlayers.forEach { uuid ->
-            val name = Vars.netServer.admins.getInfo(uuid)?.lastName ?: uuid.take(8)
-
-
-            btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
-                MenusManage.createTextInput(
-                    title = I18nManager.get("revert.input_seconds.title", player),
-                    desc = I18nManager.get("revert.input_seconds.desc", player),
-                    isNum = true,
-                    placeholder = "180"
-                ) { _, input ->
-                    val seconds = input.toIntOrNull()
-                    if (seconds == null || seconds < 1) {
+                        RevertBuild.restoreAllPlayersEditsWithinSeconds(seconds)
                         Call.announce(
                             player.con,
-                            "${PluginVars.WARN}${I18nManager.get("revert.invalid_input", player)}${PluginVars.RESET}"
+                            "${PluginVars.SUCCESS}${I18nManager.get("revert.all_success", player)}${PluginVars.RESET}"
                         )
-                        return@createTextInput
-                    }
+                    }(player)
+                })
 
-                    restorePlayerEditsWithinSeconds(uuid, seconds)
+            revertPlayers.forEach { uuid ->
+                val name = Vars.netServer.admins.getInfo(uuid)?.lastName ?: uuid.take(8)
 
-                    Call.announce(
-                        player.con,
-                        "${PluginVars.SUCCESS}${I18nManager.get("revert.player_success", player)} $name${PluginVars.RESET}"
-                    )
-                }(player)
-            })
+
+                btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
+                    MenusManage.createTextInput(
+                        title = I18nManager.get("revert.input_seconds.title", player),
+                        desc = I18nManager.get("revert.input_seconds.desc", player),
+                        isNum = true,
+                        placeholder = "180"
+                    ) { _, input ->
+                        val seconds = input.toIntOrNull()
+                        if (seconds == null || seconds < 1) {
+                            Call.announce(
+                                player.con,
+                                "${PluginVars.WARN}${
+                                    I18nManager.get(
+                                        "revert.invalid_input",
+                                        player
+                                    )
+                                }${PluginVars.RESET}"
+                            )
+                            return@createTextInput
+                        }
+
+                        restorePlayerEditsWithinSeconds(uuid, seconds)
+
+                        Call.announce(
+                            player.con,
+                            "${PluginVars.SUCCESS}${
+                                I18nManager.get(
+                                    "revert.player_success",
+                                    player
+                                )
+                            } $name${PluginVars.RESET}"
+                        )
+                    }(player)
+                })
+            }
+
+            MenusManage.createMenu<Unit>(
+                title = { _, _, _, _ ->
+                    "${PluginVars.GRAY}${
+                        I18nManager.get(
+                            "revert.title",
+                            player
+                        )
+                    }${PluginVars.RESET}"
+                },
+                paged = false,
+                desc = { _, _, _ -> "" },
+                options = { _, _, _ -> btns }
+            )(player, 1)
         }
-
-        MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("revert.title", player)}${PluginVars.RESET}" },
-            paged = false,
-            desc = { _, _, _ -> "" },
-            options = { _, _, _ -> btns }
-        )(player, 1)
     }
 
 
