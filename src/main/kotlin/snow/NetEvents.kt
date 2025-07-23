@@ -56,11 +56,7 @@ object NetEvents {
             .mapValues { (_, lists) -> lists.flatten() }
 
         normLangGroups.forEach { (lang, players) ->
-            if (lang == "auto" || lang.equals(sender.locale(), true)) {
-                players.forEach { it.sendMessage(localMsg) }
-            } else {
-                sendTranslatedBroadcast(plain, prefix, lang, players, fallback = localMsg)
-            }
+            sendTranslatedBroadcast(plain, prefix, lang, players, fallback = localMsg)
         }
     }
 
