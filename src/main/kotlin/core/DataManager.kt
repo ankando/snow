@@ -13,7 +13,6 @@ data class PlayerData(
     var score: Int,
     var wins: Int,
     var banUntil: Long,
-    var isAdmin: Boolean,
     var isLock: Boolean
 ) {
     companion object {
@@ -25,7 +24,7 @@ data class PlayerData(
             lang: String
         ) = PlayerData(
             id, account, password, mutableListOf(uuid), lang,
-            0, 0, 0, isAdmin = false, isLock = true
+            0, 0, 0, isLock = true
         )
     }
 }
@@ -88,7 +87,6 @@ object DataManager {
                 score = (js["score"] as? Number)?.toInt() ?: 0,
                 wins = (js["wins"] as? Number)?.toInt() ?: 0,
                 banUntil = (js["banUntil"] as? Number)?.toLong() ?: 0,
-                isAdmin = js["isAdmin"] as? Boolean ?: false,
                 isLock = js["isLock"] as? Boolean ?: true
             )
             players.put(id, data)
@@ -171,7 +169,6 @@ object DataManager {
                 "score" to it.value.score,
                 "wins" to it.value.wins,
                 "banUntil" to it.value.banUntil,
-                "isAdmin" to it.value.isAdmin,
                 "isLock" to it.value.isLock
             )
         }

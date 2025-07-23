@@ -9,6 +9,7 @@ import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Sounds
 import plugin.core.*
+import plugin.core.PermissionManager.isCoreAdmin
 import plugin.snow.PluginMenus.showAuthMenu
 import plugin.snow.PluginMenus.showTeamMenu
 import kotlin.math.max
@@ -33,6 +34,9 @@ object EventManager {
             if (pData == null) {
                 showAuthMenu(player)
                 return@on
+            }
+            if (isCoreAdmin(player.uuid())) {
+                player.admin = true
             }
         }
 

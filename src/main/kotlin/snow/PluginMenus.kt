@@ -1081,7 +1081,6 @@ object PluginMenus {
     fun showSetProfileMenu(player: Player) {
         val acc = DataManager.getPlayerDataByUuid(player.uuid()) ?: return
         val isCoreAdmin = isCoreAdmin(player.uuid())
-        val canToggleAdmin = isCoreAdmin
         val strong = PluginVars.WHITE
         val weak = PluginVars.WARN
 
@@ -1179,27 +1178,7 @@ object PluginMenus {
             )
         }
 
-        val btnAdmin = MenuEntry(
-            "${if (canToggleAdmin) strong else weak}${I18nManager.get("profile.admin", player)}: ${
-                if (acc.isAdmin) i18nTrue else i18nFalse
-            }${PluginVars.RESET}"
-        ) {
-            if (!canToggleAdmin) {
-                Call.announce(
-                    player.con,
-                    "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}"
-                )
-                return@MenuEntry
-            }
-            DataManager.updatePlayer(acc.id) { it.isAdmin = !acc.isAdmin }
-            if (player.admin() != acc.isAdmin) player.admin = acc.isAdmin
-            Call.announce(
-                player.con,
-                "${PluginVars.SUCCESS}${I18nManager.get("player.admin.success", player)}${PluginVars.RESET}"
-            )
-        }
-
-        val rows = listOf(btnLogout, btnUsername, btnPassword, btnLang, btnLock, btnAdmin)
+        val rows = listOf(btnLogout, btnUsername, btnPassword, btnLang, btnLock)
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ ->

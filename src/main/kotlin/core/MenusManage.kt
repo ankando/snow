@@ -134,7 +134,7 @@ object MenusManage {
                 player.con,
                 menuHolder.menuId,
                 title(player),
-                desc(player),
+                "\n${desc(player)}\n",
                 buttons
             )
         }
