@@ -3,7 +3,7 @@ package plugin.snow
 object PluginVars {
 
     const val MENU_BUTTONS_PER_PAGE = 10
-    const val MENU_CONFIRM_TIMEOUT_SEC = 10L
+    const val MENU_CONFIRM_TIMEOUT_SEC = 21L
     const val MENU_TEXT_INPUT_MAX_CHARS = 32
     const val RATIO = 0.65
     const val TEAM_RATIO = 0.7
