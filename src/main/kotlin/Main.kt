@@ -39,13 +39,14 @@ class Main : Plugin() {
         "VN" to "vi", "TH" to "th", "ID" to "id", "PH" to "fil", "ES-PV" to "eu", "GR" to "el", "IN" to "hi"
     )
     private val langName = mapOf(
-        "zh" to "雪", "ja" to "スノー", "ko" to "스노우", "ru" to "Сноу", "uk" to "Сніг", "be" to "Снег",
-        "sr" to "Снег", "bg" to "Сняг", "fr" to "Neige", "es" to "Nieve", "pt" to "Neve", "it" to "Neve",
-        "de" to "Schnee", "nl" to "Sneeuw", "pl" to "Śnieg", "cs" to "Sníh", "ro" to "Zăpadă", "hu" to "Hó",
-        "fi" to "Lumi", "sv" to "Snö", "da" to "Sne", "et" to "Lumi", "lt" to "Sniegas", "tr" to "Kar",
-        "tk" to "Gar", "vi" to "Tuyết", "th" to "หิมะ", "id" to "Salju", "fil" to "Niyebe", "eu" to "Elur",
-        "el" to "Χιόνι", "hi" to "बर्फ", "en" to "Snow"
+        "zh" to "霜", "ja" to "霜", "ko" to "서리", "ru" to "Иней", "uk" to "Іній", "be" to "Іней",
+        "sr" to "Слута", "bg" to "Скреж", "fr" to "Givre", "es" to "Escarcha", "pt" to "Geada", "it" to "Brina",
+        "de" to "Reif", "nl" to "Vorst", "pl" to "Szron", "cs" to "Jinovatka", "ro" to "Brumă", "hu" to "Dér",
+        "fi" to "Halla", "sv" to "Frost", "da" to "Rimfrost", "et" to "Härmatis", "lt" to "Šerkšnas", "tr" to "Kırağı",
+        "tk" to "Şyg", "vi" to "Sương giá", "th" to "น้ำค้างแข็ง", "id" to "Embun beku", "fil" to "Hamog na nagyeyelo", "eu" to "Izotz",
+        "el" to "Παγετός", "hi" to "पाला", "en" to "Frost"
     )
+
     private val geoDB by lazy {
         if (!dbFile.exists()) javaClass.classLoader.getResourceAsStream(dbFile.name())!!.use {
             dbFile.write(it, false)

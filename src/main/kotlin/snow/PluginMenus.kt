@@ -11,6 +11,9 @@ import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
+import mindustry.io.SaveIO
+import mindustry.net.Packets
+import mindustry.net.WorldReloader
 import mindustry.type.UnitType
 import mindustry.ui.Menus
 import mindustry.world.Block
@@ -24,6 +27,170 @@ import kotlin.math.max
 import kotlin.math.pow
 
 object PluginMenus {
+
+
+    private val snapshotFolder: arc.files.Fi = Vars.saveDirectory.child("snapshots")
+
+    fun showSnapshotMenu(player: Player, page: Int = 1) {
+        snapshotFolder.mkdirs()
+
+        val rows = mutableListOf<MenuEntry>()
+
+        rows += MenuEntry("${PluginVars.WHITE}${I18nManager.get("snapshot.add", player)}${PluginVars.RESET}") {
+            val ts = System.currentTimeMillis()
+            val file = snapshotFolder.child("$ts.msav")
+            if (!isCoreAdmin(player.uuid())) {
+                showConfirmMenu(player) {
+                    VoteManager.createGlobalVote(creator = player) { ok ->
+                        if (ok && Vars.state.isGame) {
+                            SaveIO.save(file)
+                            Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.saved", player)}${PluginVars.RESET}")
+                        }
+                    }
+                    Groups.player.forEach { p ->
+                        if (p != player && !isBanned(p.uuid())) {
+                            val t = "${PluginVars.INFO}${I18nManager.get("snapshot.vote.title", p)}${PluginVars.RESET}"
+                            val d = "${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.vote.desc", p)}${PluginVars.RESET}"
+                            createConfirmMenu(
+                                title = { t },
+                                desc = { d },
+                                onResult = { pl, choice -> if (choice == 0) VoteManager.addVote(pl.uuid()) }
+                            )(p)
+                        }
+                    }
+                }
+            } else {
+                SaveIO.save(file)
+                Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.saved", player)}${PluginVars.RESET}")
+                showSnapshotMenu(player)
+            }
+        }
+
+        val mapEntries = snapshotFolder.list().filter { it.extension() == "msav" }
+            .mapNotNull { file ->
+                val ts = file.nameWithoutExtension().toLongOrNull() ?: return@mapNotNull null
+                val mapName = runCatching { SaveIO.getMeta(file).map.name() }.getOrElse { "Unknown" }
+                Triple(mapName, ts, file)
+            }
+            .groupBy { it.first }
+            .mapValues { (_, list) -> list.sortedByDescending { it.second } }
+            .toList()
+            .sortedByDescending { it.second.firstOrNull()?.second ?: 0L }
+
+        mapEntries.forEach { (mapName, group) ->
+            group.forEachIndexed { i, (_, _, file) ->
+                val label = "${PluginVars.WHITE}$mapName#${i + 1}${PluginVars.RESET}"
+                rows += MenuEntry(label) { p -> showSnapshotOptionsMenu(p, file, mapName, i + 1) }
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("snapshot.title", player)}${PluginVars.RESET}" },
+            desc = { _, _, _ -> "" },
+            paged = true,
+            options = { _, _, _ -> rows }
+        )(player, page)
+    }
+
+    fun showSnapshotOptionsMenu(player: Player, file: arc.files.Fi, mapName: String, index: Int) {
+        val isAdmin = isCoreAdmin(player.uuid())
+        val normalCount = Groups.player.count { isNormal(it.uuid()) }
+        val strong = PluginVars.INFO
+        val weak = PluginVars.SECONDARY
+
+        val title = "${PluginVars.GRAY}$mapName#$index${PluginVars.RESET}"
+        val desc = ""
+
+        val btnVote = MenuEntry("${PluginVars.WHITE}${I18nManager.get("snapshot.vote", player)}${PluginVars.RESET}") {
+            if (normalCount <= 1) {
+                loadSnapshot(file)
+                Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}")
+            } else {
+                if ((DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0) < 100) {
+                    Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("noPoints", player)}${PluginVars.RESET}")
+                    return@MenuEntry
+                }
+                showConfirmMenu(player) {
+                    VoteManager.createGlobalVote(creator = player) { ok ->
+                        if (ok && Vars.state.isGame) loadSnapshot(file)
+                    }
+                    Groups.player.each { p ->
+                        if (p != player && !isBanned(p.uuid())) {
+                            val t = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
+                            val d = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.vote.desc", p)} $mapName#$index${PluginVars.RESET}"
+                            val menu = createConfirmMenu(
+                                title = { t },
+                                desc = { d },
+                                onResult = { pl, choice ->
+                                    if (choice == 0) VoteManager.addVote(pl.uuid())
+                                }
+                            )
+                            menu(p)
+                        }
+                    }
+                }
+            }
+        }
+
+        val btnChange = MenuEntry("${if (isAdmin) strong else weak}${I18nManager.get("snapshot.change", player)}${PluginVars.RESET}") {
+            if (!isAdmin) {
+                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+                return@MenuEntry
+            }
+            showConfirmMenu(player) {
+                loadSnapshot(file)
+            }
+        }
+
+        val btnDelete = MenuEntry("${if (isAdmin) strong else weak}${I18nManager.get("snapshot.delete", player)}${PluginVars.RESET}") {
+            if (!isAdmin) {
+                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+                return@MenuEntry
+            }
+            showConfirmMenu(player) {
+                if (file.exists() && file.delete()) {
+                    Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.deleted", player)}${PluginVars.RESET}")
+                } else {
+                    Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("snapshot.delete_failed", player)}${PluginVars.RESET}")
+                }
+                showSnapshotMenu(player)
+            }
+        }
+
+        val rows = mutableListOf(btnVote)
+        if (isAdmin) {
+            rows += btnChange
+            rows += btnDelete
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> title },
+            desc = { _, _, _ -> desc },
+            paged = false,
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+    private fun loadSnapshot(file: arc.files.Fi) {
+        if (!file.exists()) return
+        try {
+            if (Vars.state.isGame) {
+                Groups.player.each { it.kick(Packets.KickReason.serverRestarting) }
+                Vars.state.set(mindustry.core.GameState.State.menu)
+                Vars.net.closeServer()
+            }
+            RevertBuild.clearAll()
+            VoteManager.clearVote()
+            val reloader = WorldReloader()
+            reloader.begin()
+            SaveIO.load(file)
+            Vars.state.set(mindustry.core.GameState.State.playing)
+            Vars.netServer.openServer()
+            reloader.end()
+        } catch (_: Exception) { }
+    }
+
+
 
     fun showGamesMenu(player: Player, page: Int = 1) {
         val games = listOf(
@@ -911,7 +1078,8 @@ object PluginMenus {
                     "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}"
                 )
             } else {
-                if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60) {
+                val points = DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0
+                if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60 && points < 150) {
                     Call.announce(player.con, "${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
                     return@MenuEntry
                 }
@@ -1080,7 +1248,6 @@ object PluginMenus {
 
     fun showSetProfileMenu(player: Player) {
         val acc = DataManager.getPlayerDataByUuid(player.uuid()) ?: return
-        val isCoreAdmin = isCoreAdmin(player.uuid())
         val strong = PluginVars.WHITE
         val weak = PluginVars.WARN
 
@@ -1515,7 +1682,7 @@ object PluginMenus {
         val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel))
         val point = DataManager.getPlayerDataByUuid(player.uuid())?.score
         if (!isCoreAdmin(player.uuid()) && (point == null || point < 50)) {
-            Call.announce(player.con(), I18nManager.get("upload.nopoint", player))
+            Call.announce(player.con(), I18nManager.get("noPoints", player))
             return
         }
         Call.menu(
