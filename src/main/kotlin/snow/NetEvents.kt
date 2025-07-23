@@ -39,29 +39,68 @@ object NetEvents {
         return null as String?
     }
 
-    private const val MAX_CHAT_LEN = 256
     private val ctrlCharRegex = Regex("""[\u0000-\u001F]""")
 
     fun broadcast(sender: Player, raw: String) {
         val plain = Strings.stripColors(raw).trim()
         if (plain.isBlank() || ctrlCharRegex.containsMatchIn(plain)) return
 
-        val limited = plain.take(MAX_CHAT_LEN)
         val prefix = buildChatPrefix(sender)
-        val local = "$prefix: ${PluginVars.GRAY}$limited${PluginVars.RESET}"
+        val localMsg = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
+        sender.sendMessage(localMsg)
 
-        sender.sendMessage(local)
+        val rawLangGroups = groupPlayersByLang(sender)
 
-        val langGroups = groupPlayersByLang(sender)
+        val normLangGroups = rawLangGroups.entries
+            .groupBy({ (lang, _) -> normalizeLang(lang) }) { it.value }
+            .mapValues { (_, lists) -> lists.flatten() }
 
-        langGroups.forEach { (lang, players) ->
+        normLangGroups.forEach { (lang, players) ->
             if (lang == "auto" || lang.equals(sender.locale(), true)) {
-                players.forEach { it.sendMessage(local) }
+                players.forEach { it.sendMessage(localMsg) }
             } else {
-                sendTranslatedBroadcast(limited, prefix, lang, players, fallback = local)
+                sendTranslatedBroadcast(plain, prefix, lang, players, fallback = localMsg)
             }
         }
     }
+
+    private fun sendTranslatedBroadcast(
+        text: String,
+        prefix: String,
+        lang: String,
+        players: List<Player>,
+        fallback: String
+    ) {
+        Translator.translate(
+            text, "auto", lang,
+            onResult = { translated ->
+                Core.app.post {
+                    val body = if (translated != text)
+                        "$text ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                    else text
+                    val msg = "$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}"
+                    players.forEach { it.sendMessage(msg) }
+                }
+            },
+            onError = {
+                Core.app.post { players.forEach { it.sendMessage(fallback) } }
+            }
+        )
+    }
+
+    private fun normalizeLang(raw: String?): String {
+        if (raw.isNullOrBlank()) return "auto"
+        val u = raw.trim().lowercase()
+        return when {
+            u.startsWith("zh") -> "zh"
+            u.startsWith("en") -> "en"
+            u.startsWith("ru") -> "ru"
+            u.startsWith("ja") -> "ja"
+            u.startsWith("ko") -> "ko"
+            else -> u.substringBefore('_').substringBefore('-')
+        }
+    }
+
 
     fun gradientText(baseHex: String, text: String): String {
         if (text.isEmpty()) return ""
@@ -160,29 +199,7 @@ object NetEvents {
         return groups
     }
 
-    private fun sendTranslatedBroadcast(
-        text: String,
-        prefix: String,
-        lang: String,
-        players: List<Player>,
-        fallback: String
-    ) {
-        Translator.translate(
-            text, "auto", lang,
-            onResult = { translated ->
-                Core.app.post {
-                    val body = if (translated != text)
-                        "$text ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
-                    else text
-                    val msg = "$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}"
-                    players.forEach { it.sendMessage(msg) }
-                }
-            },
-            onError = {
-                Core.app.post { players.forEach { it.sendMessage(fallback) } }
-            }
-        )
-    }
+
 
 
     private const val BAN_MS = 30 * 60_000L
