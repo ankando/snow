@@ -1,1 +1,1 @@
-rootProject.name = "frost"
+rootProject.name = "snow"
