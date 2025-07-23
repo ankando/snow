@@ -1533,6 +1533,11 @@ object PluginMenus {
         val closeLabel = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
         val openLabel = "${PluginVars.INFO}${I18nManager.get("open", player)}${PluginVars.RESET}"
         val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel))
+        val point = DataManager.getPlayerDataByUuid(player.uuid())?.score
+        if (!isCoreAdmin(player.uuid()) && (point == null || point < 50)) {
+            Call.announce(player.con(), I18nManager.get("upload.nopoint", player))
+            return
+        }
         Call.menu(
             player.con,
             uploadMapMenuId,

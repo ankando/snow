@@ -19,6 +19,7 @@ dependencies {
     compileOnly("com.github.Anuken.Mindustry:core:v149")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.maxmind.geoip2:geoip2:4.3.0")
+    implementation("com.deepl.api:deepl-java:1.10.2")
 }
 
 kotlin {
