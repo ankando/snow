@@ -212,8 +212,8 @@ object ClientCommands {
                         val desc = "${PluginVars.GRAY}${I18nManager.get("surrender.vote.desc", p)}${PluginVars.RESET}"
 
                         val menu = MenusManage.createConfirmMenu(
-                            title = title,
-                            desc = desc,
+                            title = {title},
+                            desc = {desc},
                             onResult = { pl, choice ->
                                 if (choice == 0) {
                                     VoteManager.addVote(pl.uuid(), team)

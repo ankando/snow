@@ -472,46 +472,46 @@ object PluginMenus {
             blocksIndex -> showBlocksMenu(player)
             unitsIndex -> showUnitsMenu(player)
             in 0 until allRules.size -> {
-                    val rule = allRules[choice]
-                    if (editableBooleanRules.contains(rule)) {
-                        val cur = getRuleValue(rule) as? Boolean ?: return@registerMenu
-                        Vars.state.rules.setRule(rule, !cur)
-                        Call.announce("${PluginVars.GRAY}${p.plainName()} \uE87C $rule: ${!cur}")
-                        Call.setRules(Vars.state.rules)
-                        showRulesMenu(player)
-                    } else if (editableFloatRules.contains(rule)) {
-                        promptRuleValueInput(player, rule)
-                    }
+                val rule = allRules[choice]
+                if (editableBooleanRules.contains(rule)) {
+                    val cur = getRuleValue(rule) as? Boolean ?: return@registerMenu
+                    Vars.state.rules.setRule(rule, !cur)
+                    Call.announce("${PluginVars.GRAY}${p.plainName()} \uE87C $rule: ${!cur}")
+                    Call.setRules(Vars.state.rules)
+                    showRulesMenu(player)
+                } else if (editableFloatRules.contains(rule)) {
+                    promptRuleValueInput(player, rule)
                 }
+            }
         }
     }
 
     fun showRulesMenu(player: Player) {
-            val allRules = editableBooleanRules + editableFloatRules
-            val rows = allRules.chunked(3).map { row ->
-                row.map { rule ->
-                    val value = getRuleValue(rule)
-                    "\n${PluginVars.WHITE}$rule: ${PluginVars.SECONDARY}$value${PluginVars.RESET}\n"
-                }.toTypedArray()
-            }.toMutableList()
+        val allRules = editableBooleanRules + editableFloatRules
+        val rows = allRules.chunked(3).map { row ->
+            row.map { rule ->
+                val value = getRuleValue(rule)
+                "\n${PluginVars.WHITE}$rule: ${PluginVars.SECONDARY}$value${PluginVars.RESET}\n"
+            }.toTypedArray()
+        }.toMutableList()
 
-            val blocksLabel =
-                "${PluginVars.WHITE}\uE871 ${I18nManager.get("rules.blocks", player)}${PluginVars.RESET}"
-            val unitsLabel =
-                "${PluginVars.WHITE}\uE82A ${I18nManager.get("rules.units", player)}${PluginVars.RESET}"
-            val closeLabel = "${PluginVars.GRAY}\uE815${PluginVars.RESET}"
-            rows += arrayOf(blocksLabel)
-            rows += arrayOf(unitsLabel)
-            rows += arrayOf(closeLabel)
-            val buttons = rows.toTypedArray()
-            Call.followUpMenu(
-                player.con,
-                rulesMenuId,
-                "${PluginVars.GRAY}${I18nManager.get("rules.title", player)}${PluginVars.RESET}",
-                "",
-                buttons
-            )
-        }
+        val blocksLabel =
+            "${PluginVars.WHITE}\uE871 ${I18nManager.get("rules.blocks", player)}${PluginVars.RESET}"
+        val unitsLabel =
+            "${PluginVars.WHITE}\uE82A ${I18nManager.get("rules.units", player)}${PluginVars.RESET}"
+        val closeLabel = "${PluginVars.GRAY}\uE815${PluginVars.RESET}"
+        rows += arrayOf(blocksLabel)
+        rows += arrayOf(unitsLabel)
+        rows += arrayOf(closeLabel)
+        val buttons = rows.toTypedArray()
+        Call.followUpMenu(
+            player.con,
+            rulesMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("rules.title", player)}${PluginVars.RESET}",
+            "",
+            buttons
+        )
+    }
 
     private val blockMenuId: Int = Menus.registerMenu { p, choice ->
         val player = p ?: return@registerMenu
@@ -523,11 +523,11 @@ object PluginMenus {
         when (choice) {
             closeIndex -> Call.hideFollowUpMenu(player.con, blockMenuId)
             in 0 until blocks.size -> {
-                    val block = blocks[choice]
-                    if (bannedBlocks.contains(block)) bannedBlocks.remove(block) else bannedBlocks.add(block)
-                    Call.setRules(Vars.state.rules)
-                    showBlocksMenu(player)
-                }
+                val block = blocks[choice]
+                if (bannedBlocks.contains(block)) bannedBlocks.remove(block) else bannedBlocks.add(block)
+                Call.setRules(Vars.state.rules)
+                showBlocksMenu(player)
+            }
         }
     }
 
@@ -540,55 +540,55 @@ object PluginMenus {
         when (choice) {
             closeIndex -> Call.hideFollowUpMenu(player.con, unitMenuId)
             in 0 until units.size -> {
-                    val unit = units[choice]
-                    val bannedUnits = Vars.state.rules.bannedUnits
-                    if (bannedUnits.contains(unit)) bannedUnits.remove(unit) else bannedUnits.add(unit)
-                    Call.setRules(Vars.state.rules)
-                    showUnitsMenu(player)
-                }
+                val unit = units[choice]
+                val bannedUnits = Vars.state.rules.bannedUnits
+                if (bannedUnits.contains(unit)) bannedUnits.remove(unit) else bannedUnits.add(unit)
+                Call.setRules(Vars.state.rules)
+                showUnitsMenu(player)
+            }
         }
     }
 
     private fun showBlocksMenu(player: Player) {
-            val banned = Vars.state.rules.bannedBlocks
-            val rows = sortedBlocks()
-                .chunked(4)
-                .map { row ->
-                    row.map { b ->
-                        val col = if (banned.contains(b)) PluginVars.SECONDARY else PluginVars.WHITE
-                        "$col${b.localizedName}${PluginVars.RESET}"
-                    }.toTypedArray()
-                }.toMutableList()
+        val banned = Vars.state.rules.bannedBlocks
+        val rows = sortedBlocks()
+            .chunked(4)
+            .map { row ->
+                row.map { b ->
+                    val col = if (banned.contains(b)) PluginVars.SECONDARY else PluginVars.WHITE
+                    "$col${b.localizedName}${PluginVars.RESET}"
+                }.toTypedArray()
+            }.toMutableList()
 
-            rows += arrayOf("${PluginVars.GRAY}\uE815${PluginVars.RESET}")
-            Call.followUpMenu(
-                player.con,
-                blockMenuId,
-                "${PluginVars.GRAY}${I18nManager.get("rules.blocks", player)}${PluginVars.RESET}",
-                "",
-                rows.toTypedArray()
-            )
+        rows += arrayOf("${PluginVars.GRAY}\uE815${PluginVars.RESET}")
+        Call.followUpMenu(
+            player.con,
+            blockMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("rules.blocks", player)}${PluginVars.RESET}",
+            "",
+            rows.toTypedArray()
+        )
     }
 
     private fun showUnitsMenu(player: Player) {
-            val banned = Vars.state.rules.bannedUnits
-            val rows = sortedUnits()
-                .chunked(4)
-                .map { row ->
-                    row.map { u ->
-                        val col = if (banned.contains(u)) PluginVars.SECONDARY else PluginVars.WHITE
-                        "$col${u.localizedName}${PluginVars.RESET}"
-                    }.toTypedArray()
-                }.toMutableList()
+        val banned = Vars.state.rules.bannedUnits
+        val rows = sortedUnits()
+            .chunked(4)
+            .map { row ->
+                row.map { u ->
+                    val col = if (banned.contains(u)) PluginVars.SECONDARY else PluginVars.WHITE
+                    "$col${u.localizedName}${PluginVars.RESET}"
+                }.toTypedArray()
+            }.toMutableList()
 
-            rows += arrayOf("${PluginVars.GRAY}\uE815${PluginVars.RESET}")
-            Call.followUpMenu(
-                player.con,
-                unitMenuId,
-                "${PluginVars.GRAY}${I18nManager.get("rules.units", player)}${PluginVars.RESET}",
-                "",
-                rows.toTypedArray()
-            )
+        rows += arrayOf("${PluginVars.GRAY}\uE815${PluginVars.RESET}")
+        Call.followUpMenu(
+            player.con,
+            unitMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("rules.units", player)}${PluginVars.RESET}",
+            "",
+            rows.toTypedArray()
+        )
     }
 
     fun showHelpMenu(player: Player, page: Int = 1) {
@@ -923,24 +923,25 @@ object PluginMenus {
                         }
                     }
 
-                        Groups.player.each { p ->
-                            if (p != player && !isBanned(p.uuid())) {
-                                val title = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
-                                val desc = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
+                    Groups.player.each { p ->
+                        if (p != player && !isBanned(p.uuid())) {
+                            val title = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
+                            val desc = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
 
-                                val menu = createConfirmMenu(
-                                    title = title,
-                                    desc = desc,
-                                    onResult = { pl, choice ->
-                                        if (choice == 0) {
-                                            VoteManager.addVote(pl.uuid())
-                                        }
+                            val menu = createConfirmMenu(
+                                title = { title },
+                                desc = { desc },
+                                onResult = { pl, choice ->
+                                    if (choice == 0) {
+                                        VoteManager.addVote(pl.uuid())
                                     }
-                                )
+                                }
+                            )
 
-                                menu(p)
-                            }
+
+                            menu(p)
                         }
+                    }
                 }
             }
         }
@@ -1423,98 +1424,98 @@ object PluginMenus {
 
     fun showRevertMenu(player: Player) {
         if (!isCoreAdmin(player.uuid())) return
-            val revertPlayers = RevertBuild.getAllPlayersWithEdits()
-            val btns = mutableListOf<MenuEntry>()
-            btns.add(
-                MenuEntry(
-                    "${PluginVars.WHITE}${
-                        I18nManager.get(
-                            "revert.all_players",
-                            player
-                        )
-                    }${PluginVars.RESET}"
-                ) {
-                    MenusManage.createTextInput(
-                        title = I18nManager.get("revert.input_seconds.title", player),
-                        desc = I18nManager.get("revert.input_seconds.desc", player),
-                        isNum = true,
-                        placeholder = "180"
-                    ) { _, input ->
-                        val seconds = input.toIntOrNull()
-                        if (seconds == null || seconds < 1) {
-                            Call.announce(
-                                player.con,
-                                "${PluginVars.WARN}${
-                                    I18nManager.get(
-                                        "revert.invalid_input",
-                                        player
-                                    )
-                                }${PluginVars.RESET}"
-                            )
-                            return@createTextInput
-                        }
-
-                        RevertBuild.restoreAllPlayersEditsWithinSeconds(seconds)
+        val revertPlayers = RevertBuild.getAllPlayersWithEdits()
+        val btns = mutableListOf<MenuEntry>()
+        btns.add(
+            MenuEntry(
+                "${PluginVars.WHITE}${
+                    I18nManager.get(
+                        "revert.all_players",
+                        player
+                    )
+                }${PluginVars.RESET}"
+            ) {
+                MenusManage.createTextInput(
+                    title = I18nManager.get("revert.input_seconds.title", player),
+                    desc = I18nManager.get("revert.input_seconds.desc", player),
+                    isNum = true,
+                    placeholder = "180"
+                ) { _, input ->
+                    val seconds = input.toIntOrNull()
+                    if (seconds == null || seconds < 1) {
                         Call.announce(
                             player.con,
-                            "${PluginVars.SUCCESS}${I18nManager.get("revert.all_success", player)}${PluginVars.RESET}"
-                        )
-                    }(player)
-                })
-
-            revertPlayers.forEach { uuid ->
-                val acc = DataManager.getPlayerDataByUuid(uuid)
-                val name = acc?.account ?: uuid.take(8)
-
-                btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
-                    MenusManage.createTextInput(
-                        title = I18nManager.get("revert.input_seconds.title", player),
-                        desc = I18nManager.get("revert.input_seconds.desc", player),
-                        isNum = true,
-                        placeholder = "180"
-                    ) { _, input ->
-                        val seconds = input.toIntOrNull()
-                        if (seconds == null || seconds < 1) {
-                            Call.announce(
-                                player.con,
-                                "${PluginVars.WARN}${
-                                    I18nManager.get(
-                                        "revert.invalid_input",
-                                        player
-                                    )
-                                }${PluginVars.RESET}"
-                            )
-                            return@createTextInput
-                        }
-
-                        restorePlayerEditsWithinSeconds(uuid, seconds)
-
-                        Call.announce(
-                            player.con,
-                            "${PluginVars.SUCCESS}${
+                            "${PluginVars.WARN}${
                                 I18nManager.get(
-                                    "revert.player_success",
+                                    "revert.invalid_input",
                                     player
                                 )
-                            } $name${PluginVars.RESET}"
+                            }${PluginVars.RESET}"
                         )
-                    }(player)
-                })
-            }
+                        return@createTextInput
+                    }
 
-            MenusManage.createMenu<Unit>(
-                title = { _, _, _, _ ->
-                    "${PluginVars.GRAY}${
-                        I18nManager.get(
-                            "revert.title",
-                            player
+                    RevertBuild.restoreAllPlayersEditsWithinSeconds(seconds)
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${I18nManager.get("revert.all_success", player)}${PluginVars.RESET}"
+                    )
+                }(player)
+            })
+
+        revertPlayers.forEach { uuid ->
+            val acc = DataManager.getPlayerDataByUuid(uuid)
+            val name = acc?.account ?: uuid.take(8)
+
+            btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
+                MenusManage.createTextInput(
+                    title = I18nManager.get("revert.input_seconds.title", player),
+                    desc = I18nManager.get("revert.input_seconds.desc", player),
+                    isNum = true,
+                    placeholder = "180"
+                ) { _, input ->
+                    val seconds = input.toIntOrNull()
+                    if (seconds == null || seconds < 1) {
+                        Call.announce(
+                            player.con,
+                            "${PluginVars.WARN}${
+                                I18nManager.get(
+                                    "revert.invalid_input",
+                                    player
+                                )
+                            }${PluginVars.RESET}"
                         )
-                    }${PluginVars.RESET}"
-                },
-                paged = false,
-                desc = { _, _, _ -> "" },
-                options = { _, _, _ -> btns }
-            )(player, 1)
+                        return@createTextInput
+                    }
+
+                    restorePlayerEditsWithinSeconds(uuid, seconds)
+
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${
+                            I18nManager.get(
+                                "revert.player_success",
+                                player
+                            )
+                        } $name${PluginVars.RESET}"
+                    )
+                }(player)
+            })
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ ->
+                "${PluginVars.GRAY}${
+                    I18nManager.get(
+                        "revert.title",
+                        player
+                    )
+                }${PluginVars.RESET}"
+            },
+            paged = false,
+            desc = { _, _, _ -> "" },
+            options = { _, _, _ -> btns }
+        )(player, 1)
     }
 
 
@@ -1601,14 +1602,15 @@ object PluginMenus {
                 } ${target.name()}${PluginVars.RESET}"
 
                 val voteMenu = createConfirmMenu(
-                    title = title,
-                    desc = desc,
-                    onResult = { player, choice ->
+                    title = { title },
+                    desc = { desc },
+                    onResult = { pl, choice ->
                         if (choice == 0) {
-                            VoteManager.addVote(player.uuid())
+                            VoteManager.addVote(pl.uuid())
                         }
                     }
                 )
+
 
                 voteMenu(p)
             }
@@ -1621,12 +1623,13 @@ object PluginMenus {
         val desc = I18nManager.get("confirm.desc", player)
 
         createConfirmMenu(
-            title = title,
-            desc = desc,
+            title = { title },
+            desc = { desc },
             onResult = { p, choice ->
                 if (choice == 0) onConfirm(p)
             }
         )(player)
     }
+
 
 }

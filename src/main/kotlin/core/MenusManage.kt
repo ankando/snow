@@ -110,21 +110,38 @@ object MenusManage {
     }
 
     fun createConfirmMenu(
-        title: String,
-        desc: String,
+        title: (Player) -> String,
+        desc: (Player) -> String,
         onResult: (Player, Int?) -> Unit,
         yesText: String = "${PluginVars.GRAY}${PluginVars.ICON_OK}${PluginVars.RESET}",
         noText: String = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
     ): (Player) -> Unit {
-        return { player ->
-                val menuId = Menus.registerMenu { p, choice ->
-                    if (p != null && !isBanned(p.uuid())) {
-                            onResult(p, choice)
-                    }
-                }
-                Call.menu(player.con, menuId, title, "\n$desc\n", arrayOf(arrayOf(yesText, noText)))
+        val menuHolder = object {
+            var menuId: Int = -1
+            lateinit var show: (Player) -> Unit
         }
+
+        menuHolder.menuId = Menus.registerMenu { p, choice ->
+            if (p != null && !isBanned(p.uuid())) {
+                Call.hideFollowUpMenu(p.con, menuHolder.menuId)
+                onResult(p, choice)
+            }
+        }
+
+        menuHolder.show = { player ->
+            val buttons = arrayOf(arrayOf(yesText, noText))
+            Call.followUpMenu(
+                player.con,
+                menuHolder.menuId,
+                title(player),
+                desc(player),
+                buttons
+            )
+        }
+
+        return menuHolder.show
     }
+
 
     fun createTextInput(
         title: String,
