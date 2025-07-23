@@ -6,14 +6,14 @@ import com.deepl.api.TextResult
 
 object Translator {
     private const val API_KEY = "c0093f4a-3d4a-4ba5-b230-830460627211:fx"
-    private val supported = setOf("EN", "RU", "JA", "KO", "ZH")
+    private val supported = setOf("EN-GB", "RU", "JA", "KO", "ZH")
 
     private val client = DeepLClient(API_KEY)
 
     private fun normalizeLang(input: String): String {
         val u = input.trim().uppercase()
         return when {
-            u.startsWith("EN") -> "EN"
+            u.startsWith("EN") -> "EN-GB"
             u.startsWith("RU") -> "RU"
             u.startsWith("JA") -> "JA"
             u.startsWith("KO") -> "KO"
