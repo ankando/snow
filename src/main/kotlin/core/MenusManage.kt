@@ -3,7 +3,7 @@ package plugin.core
 import mindustry.gen.Call
 import mindustry.gen.Player
 import mindustry.ui.Menus
-import plugin.core.PermissionManager.verifyPermissionLevel
+import plugin.core.PermissionManager.isBanned
 import plugin.snow.PluginVars
 import kotlin.math.max
 
@@ -26,9 +26,8 @@ object MenusManage {
         }
 
         menuHolder.menuId = Menus.registerMenu { p, choice ->
-            if (p == null) return@registerMenu
+            if (p == null || isBanned(p.uuid())) return@registerMenu
 
-            verifyPermissionLevel(p, PermissionLevel.NORMAL) {
                 val uuid = p.uuid()
                 val currentPage = pageMap[uuid] ?: 1
                 val userData = dataCache[uuid]
@@ -56,10 +55,8 @@ object MenusManage {
                     }
                 }
             }
-        }
 
         menuHolder.show = { player, page ->
-            verifyPermissionLevel(player, PermissionLevel.NORMAL) {
                 val uuid = player.uuid()
                 val userData = extraData?.invoke(player)
                 dataCache[uuid] = userData
@@ -106,7 +103,6 @@ object MenusManage {
                         desc?.invoke(player, currentPage, userData) ?: "",
                         buttons.toTypedArray()
                     )
-                }
             }
         }
 
@@ -121,16 +117,12 @@ object MenusManage {
         noText: String = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
     ): (Player) -> Unit {
         return { player ->
-            verifyPermissionLevel(player, PermissionLevel.NORMAL) {
                 val menuId = Menus.registerMenu { p, choice ->
-                    if (p != null) {
-                        verifyPermissionLevel(p, PermissionLevel.NORMAL) {
+                    if (p != null && !isBanned(p.uuid())) {
                             onResult(p, choice)
-                        }
                     }
                 }
                 Call.menu(player.con, menuId, title, "\n$desc\n", arrayOf(arrayOf(yesText, noText)))
-            }
         }
     }
 

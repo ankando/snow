@@ -29,7 +29,6 @@ object EventManager {
 
         Events.on(PlayerJoin::class.java) { e ->
             val player = e.player
-
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
             if (pData == null) {
                 showAuthMenu(player)
@@ -39,8 +38,11 @@ object EventManager {
 
         Events.on(PlayerConnectionConfirmed::class.java) { e ->
             val player = e.player
-            if (Vars.state.rules.pvp && (player.team() == null || player.team() == Team.derelict)) {
-                showTeamMenu(player)
+            val pData = DataManager.getPlayerDataByUuid(player.uuid())
+            if (pData != null) {
+                if (Vars.state.rules.pvp && (player.team() == null || player.team() == Team.derelict)) {
+                    showTeamMenu(player)
+                }
             }
         }
 
@@ -64,7 +66,6 @@ object EventManager {
                 else         -> handleCoopGameOver(winner)
             }
         }
-
         Events.on(ResetEvent::class.java) {
             PlayerTeamManager.clear()
             RevertBuild.clearAll()

@@ -2,11 +2,9 @@ package plugin.snow
 
 import arc.Core
 import arc.Events
-import arc.graphics.Color
 import arc.util.Strings
 import arc.util.Time
 import mindustry.Vars
-import mindustry.core.Version
 import mindustry.game.EventType
 import mindustry.game.Team
 import mindustry.gen.AdminRequestCallPacket
@@ -15,9 +13,13 @@ import mindustry.gen.Groups
 import mindustry.gen.Player
 import mindustry.net.Administration.TraceInfo
 import mindustry.net.NetConnection
-import mindustry.net.Packets.*
-import plugin.core.*
+import mindustry.net.Packets.AdminAction
+import mindustry.net.Packets.KickReason
+import plugin.core.DataManager
 import plugin.core.PermissionManager.isBanned
+import plugin.core.RevertBuild
+import plugin.core.Translator
+import plugin.core.VoteManager
 
 object NetEvents {
 
@@ -61,7 +63,7 @@ object NetEvents {
         }
     }
 
-    fun elegantGradientText(baseHex: String, text: String): String {
+    fun gradientText(baseHex: String, text: String): String {
         if (text.isEmpty()) return ""
 
         val clean = baseHex.removePrefix("#")
@@ -78,21 +80,21 @@ object NetEvents {
             d == 0f -> 0f
             max == r -> ((g - b) / d + (if (g < b) 6 else 0))
             max == g -> ((b - r) / d + 2)
-            else     -> ((r - g) / d + 4)
+            else -> ((r - g) / d + 4)
         } / 6f
         val l = (max + min) / 2f
         val s = if (d == 0f) 0f else d / (1f - kotlin.math.abs(2f * l - 1f))
 
-        val baseHue        = h
+        val baseHue = h
         val baseSaturation = (s * 0.4f).coerceIn(0f, 0.35f)
-        val baseLightness  = (l * 0.6f + 0.35f).coerceIn(0.55f, 0.90f)
+        val baseLightness = (l * 0.6f + 0.35f).coerceIn(0.55f, 0.90f)
 
-        val hueSpanDeg       = 12f
-        val lightnessAmp     = 0.08f
-        val saturationAmp    = 0.05f
-        val twoPi            = (Math.PI * 2).toFloat()
-        val len              = text.length
-        val invLen           = 1f / (len - 1).coerceAtLeast(1)
+        val hueSpanDeg = 12f
+        val lightnessAmp = 0.07f
+        val saturationAmp = 0.05f
+        val twoPi = (Math.PI * 2).toFloat()
+        val len = text.length
+        val invLen = 1f / (len - 1).coerceAtLeast(1)
 
         fun hslToRgb(hh: Float, ss: Float, ll: Float): Triple<Int, Int, Int> {
             val c = (1 - kotlin.math.abs(2 * ll - 1)) * ss
@@ -104,7 +106,7 @@ object NetEvents {
                 hh < 3f / 6f -> Triple(0f, c, x)
                 hh < 4f / 6f -> Triple(0f, x, c)
                 hh < 5f / 6f -> Triple(x, 0f, c)
-                else         -> Triple(c, 0f, x)
+                else -> Triple(c, 0f, x)
             }
             fun ch(v: Float) = (255f * (v + m)).toInt().coerceIn(0, 255)
             return Triple(ch(rr), ch(gg), ch(bb))
@@ -140,7 +142,7 @@ object NetEvents {
                 player.team().data().hasCore()
         return if (useTeamColor) {
             val rgb = player.team().color.toString().take(6).uppercase()
-            val teamName = elegantGradientText(rgb, player.name())
+            val teamName = gradientText(rgb, Strings.stripColors(player.name()).trim())
             "${teamName}${PluginVars.RESET}"
         } else {
             "${PluginVars.INFO}${player.name()}${PluginVars.RESET}"
@@ -183,8 +185,6 @@ object NetEvents {
     }
 
 
-
-
     private const val BAN_MS = 30 * 60_000L
 
     @JvmStatic
@@ -203,6 +203,7 @@ object NetEvents {
                 restore()
                 target.kick(KickReason.kick)
             }
+
             AdminAction.ban -> {
                 restore()
                 DataManager.getPlayerDataByUuid(uuid)?.apply {
@@ -211,70 +212,29 @@ object NetEvents {
                 }
                 target.kick(KickReason.banned, BAN_MS)
             }
-            AdminAction.trace -> Call.traceInfo(con, target,
-                TraceInfo("[hidden]", "[hidden]", target.locale, target.con.modclient, target.con.mobile,
-                    target.info.timesJoined, target.info.timesKicked, arrayOf("[hidden]"), target.info.names.toArray(String::class.java)))
-            AdminAction.wave  -> {
+
+            AdminAction.trace -> Call.traceInfo(
+                con, target,
+                TraceInfo(
+                    "[hidden]",
+                    "[hidden]",
+                    target.locale,
+                    target.con.modclient,
+                    target.con.mobile,
+                    target.info.timesJoined,
+                    target.info.timesKicked,
+                    arrayOf("[hidden]"),
+                    target.info.names.toArray(String::class.java)
+                )
+            )
+
+            AdminAction.wave -> {
                 Vars.logic.skipWave()
             }
+
             AdminAction.switchTeam -> {}
         }
     }
 
 
-    @JvmStatic
-    fun connect(con: NetConnection?, any: Any?) {
-        con ?: return
-        Events.fire(EventType.ConnectionEvent(con))
-
-        val ip = con.address
-        val admins = Vars.netServer.admins
-        if (admins.isIPBanned(ip) || admins.isSubnetBanned(ip)) {
-            con.kick(KickReason.banned); return
-        }
-
-        Vars.net.connections.filter { it.address == ip }.takeIf { it.size >= 5 }?.forEach(NetConnection::close)
-    }
-
-    @JvmStatic
-    fun connectPacket(con: NetConnection?, pkt: ConnectPacket?) {
-        if (con == null || pkt == null || con.kicked) return
-        fun kick(reason: KickReason) = con.kick(reason, 0)
-        val admins = Vars.netServer.admins
-
-        val uuid = (pkt.uuid ?: "").ifBlank { con.address.removePrefix("steam:") }
-        if (uuid.isEmpty()) return
-        val ip = con.address
-        val cleanName = Strings.stripColors(pkt.name).trim()
-
-        if (cleanName.isBlank() || cleanName.length > 40 || cleanName.any { it.isISOControl() }) {
-            kick(KickReason.kick); return
-        }
-        pkt.name = Vars.netServer.fixName(cleanName)
-
-        if (admins.isIPBanned(ip) || admins.isSubnetBanned(ip) || admins.isIDBanned(uuid)) return
-
-        if (Groups.player.any { it.uuid() == uuid } || Vars.net.connections.any { it !== con && it.uuid == uuid })
-            kick(KickReason.idInUse)
-
-        if (Version.build != -1 && pkt.version != Version.build && pkt.version != -1) {
-            kick(if (pkt.version > Version.build) KickReason.serverOutdated else KickReason.clientOutdated)
-        }
-
-        val player = Player.create().apply {
-            name = pkt.name
-            this.con = con
-            locale = pkt.locale ?: "en"
-            color = Color.valueOf("#F1F1F1DD")
-        }
-        con.player = player
-        con.uuid = uuid
-        con.usid = pkt.usid
-        player.admin = DataManager.getPlayerDataByUuid(uuid)?.isAdmin == true
-
-        player.team(Vars.netServer.assignTeam(player))
-        Vars.netServer.sendWorldData(player)
-        Core.app.post { Vars.platform.updateRPC() }
-        Events.fire(EventType.PlayerConnect(player))
-    }
 }

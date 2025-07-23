@@ -15,7 +15,6 @@ import mindustry.gen.Player
 import mindustry.mod.Plugin
 import mindustry.net.Administration
 import mindustry.net.Administration.ActionType
-import mindustry.net.Packets
 import plugin.core.*
 import plugin.snow.*
 import java.net.InetAddress
@@ -64,11 +63,7 @@ class Main : Plugin() {
         Vars.netServer.assigner = NetServer.TeamAssigner { player, _ -> assignTeam(player) }
         Vars.netServer.invalidHandler = invalidCommandHandler
         Vars.netServer.admins.addChatFilter(NetEvents::chat)
-        with(Vars.net) {
-            handleServer(AdminRequestCallPacket::class.java, NetEvents::adminRequest)
-            handleServer(Packets.Connect::class.java, NetEvents::connect)
-            handleServer(Packets.ConnectPacket::class.java, NetEvents::connectPacket)
-        }
+        Vars.net.handleServer(AdminRequestCallPacket::class.java, NetEvents::adminRequest)
         Vars.netServer.admins.addActionFilter(::actionFilter)
     }
 
@@ -119,11 +114,8 @@ class Main : Plugin() {
     private fun actionFilter(action: Administration.PlayerAction?): Boolean {
         val player = action?.player ?: return false
         val uuid = player.uuid()
-
-        if (player.unit().let { it == null || it.dead() }) return false
-        if (!PermissionManager.isNormal(uuid)) return false
-        if (!player.team().data().hasCore() || player.team() == Team.derelict) return false
         if (PermissionManager.isBanned(uuid)) return false
+        if (!player.team().data().hasCore() || player.team() == Team.derelict) return false
 
         if (action.type == ActionType.breakBlock) action.tile?.let { RevertBuild.recordRemove(player, it) }
 

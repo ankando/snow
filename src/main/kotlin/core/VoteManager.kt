@@ -5,6 +5,7 @@ import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
+import plugin.core.PermissionManager.isBanned
 import plugin.core.PermissionManager.isNormal
 import plugin.snow.PluginVars
 import kotlin.math.ceil
@@ -31,8 +32,10 @@ object VoteManager{
         autoPassIfNoVoter: Boolean   = true,
         callback: (Boolean) -> Unit
     ){
-        if(!Vars.state.isGame || !isNormal(creator.uuid()) || globalVote != null) return
-
+        if(!Vars.state.isGame || isBanned(creator.uuid()) || globalVote != null) {
+            Call.announce(creator.con(), I18nManager.get("no.permission", creator))
+            return
+        }
         val exclude = excludePlayers?.mapTo(HashSet()){ it.uuid() } ?: emptySet()
         val voters  = buildVoterSet(creator, exclude)
 
@@ -48,8 +51,10 @@ object VoteManager{
         callback: (Boolean) -> Unit
     ){
         val team = creator.team()
-        if(!Vars.state.isGame || !isNormal(creator.uuid()) || teamVotes.containsKey(team)) return
-
+        if(!Vars.state.isGame || isBanned(creator.uuid()) || globalVote != null) {
+            Call.announce(creator.con(), I18nManager.get("no.permission", creator))
+            return
+        }
         val voters = buildVoterSet(creator, emptySet()).filterTo(mutableSetOf()){
             Groups.player.find{ p -> p.uuid() == it }?.team() == team
         }

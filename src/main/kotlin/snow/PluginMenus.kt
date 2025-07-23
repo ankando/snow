@@ -16,9 +16,9 @@ import mindustry.ui.Menus
 import mindustry.world.Block
 import plugin.core.*
 import plugin.core.MenusManage.createConfirmMenu
+import plugin.core.PermissionManager.isBanned
 import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PermissionManager.isNormal
-import plugin.core.PermissionManager.verifyPermissionLevel
 import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
 import kotlin.math.max
 import kotlin.math.pow
@@ -461,7 +461,7 @@ object PluginMenus {
 
     private val rulesMenuId: Int = Menus.registerMenu { p, choice ->
         val player = p ?: return@registerMenu
-
+        if (!isCoreAdmin(player.uuid())) return@registerMenu
         val allRules = editableBooleanRules + editableFloatRules
         val blocksIndex = allRules.size
         val unitsIndex = allRules.size + 1
@@ -472,10 +472,9 @@ object PluginMenus {
             blocksIndex -> showBlocksMenu(player)
             unitsIndex -> showUnitsMenu(player)
             in 0 until allRules.size -> {
-                verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
                     val rule = allRules[choice]
                     if (editableBooleanRules.contains(rule)) {
-                        val cur = getRuleValue(rule) as? Boolean ?: return@verifyPermissionLevel
+                        val cur = getRuleValue(rule) as? Boolean ?: return@registerMenu
                         Vars.state.rules.setRule(rule, !cur)
                         Call.announce("${PluginVars.GRAY}${p.plainName()} \uE87C $rule: ${!cur}")
                         Call.setRules(Vars.state.rules)
@@ -484,12 +483,10 @@ object PluginMenus {
                         promptRuleValueInput(player, rule)
                     }
                 }
-            }
         }
     }
 
     fun showRulesMenu(player: Player) {
-        verifyPermissionLevel(player, PermissionLevel.NORMAL) {
             val allRules = editableBooleanRules + editableFloatRules
             val rows = allRules.chunked(3).map { row ->
                 row.map { rule ->
@@ -515,10 +512,10 @@ object PluginMenus {
                 buttons
             )
         }
-    }
 
     private val blockMenuId: Int = Menus.registerMenu { p, choice ->
         val player = p ?: return@registerMenu
+        if (!isCoreAdmin(player.uuid())) return@registerMenu
         val bannedBlocks = Vars.state.rules.bannedBlocks
         val blocks = sortedBlocks()
         val closeIndex = blocks.size
@@ -526,37 +523,33 @@ object PluginMenus {
         when (choice) {
             closeIndex -> Call.hideFollowUpMenu(player.con, blockMenuId)
             in 0 until blocks.size -> {
-                verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
                     val block = blocks[choice]
                     if (bannedBlocks.contains(block)) bannedBlocks.remove(block) else bannedBlocks.add(block)
                     Call.setRules(Vars.state.rules)
                     showBlocksMenu(player)
                 }
-            }
         }
     }
 
     private val unitMenuId: Int = Menus.registerMenu { p, choice ->
         val player = p ?: return@registerMenu
+        if (!isCoreAdmin(player.uuid())) return@registerMenu
         val units = sortedUnits()
         val closeIndex = units.size
 
         when (choice) {
             closeIndex -> Call.hideFollowUpMenu(player.con, unitMenuId)
             in 0 until units.size -> {
-                verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
                     val unit = units[choice]
                     val bannedUnits = Vars.state.rules.bannedUnits
                     if (bannedUnits.contains(unit)) bannedUnits.remove(unit) else bannedUnits.add(unit)
                     Call.setRules(Vars.state.rules)
                     showUnitsMenu(player)
                 }
-            }
         }
     }
 
     private fun showBlocksMenu(player: Player) {
-        verifyPermissionLevel(player, PermissionLevel.NORMAL) {
             val banned = Vars.state.rules.bannedBlocks
             val rows = sortedBlocks()
                 .chunked(4)
@@ -575,11 +568,9 @@ object PluginMenus {
                 "",
                 rows.toTypedArray()
             )
-        }
     }
 
     private fun showUnitsMenu(player: Player) {
-        verifyPermissionLevel(player, PermissionLevel.NORMAL) {
             val banned = Vars.state.rules.bannedUnits
             val rows = sortedUnits()
                 .chunked(4)
@@ -598,7 +589,6 @@ object PluginMenus {
                 "",
                 rows.toTypedArray()
             )
-        }
     }
 
     fun showHelpMenu(player: Player, page: Int = 1) {
@@ -864,7 +854,7 @@ object PluginMenus {
 
                 sortedMaps.map { map ->
                     val isCurrent = map.file.name() == current.file.name()
-                    val prefix = if (isCurrent) "${PluginVars.GOLD}\uE809 " else "${PluginVars.WHITE}\uF029"
+                    val prefix = if (isCurrent) "${PluginVars.SECONDARY}\uE809 " else "${PluginVars.WHITE}\uF029"
                     val label = if (isCurrent) {
                         "$prefix${map.name()}${PluginVars.RESET}"
                     } else {
@@ -927,32 +917,30 @@ object PluginMenus {
                 }
 
                 showConfirmMenu(player) {
-                    VoteManager.createGlobalVote(
-                        creator = player
-                    ) { ok ->
+                    VoteManager.createGlobalVote(creator = player) { ok ->
                         if (ok && Vars.state.isGame) {
                             reloadWorld(map)
                         }
                     }
 
-                    Groups.player.each { p ->
-                        if (p != player && !p.dead() && isNormal(p.uuid())) {
-                            val title = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
-                            val desc = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
+                        Groups.player.each { p ->
+                            if (p != player && !isBanned(p.uuid())) {
+                                val title = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
+                                val desc = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
 
-                            val menu = createConfirmMenu(
-                                title = title,
-                                desc = desc,
-                                onResult = { pl, choice ->
-                                    if (choice == 0) {
-                                        VoteManager.addVote(pl.uuid())
+                                val menu = createConfirmMenu(
+                                    title = title,
+                                    desc = desc,
+                                    onResult = { pl, choice ->
+                                        if (choice == 0) {
+                                            VoteManager.addVote(pl.uuid())
+                                        }
                                     }
-                                }
-                            )
+                                )
 
-                            menu(p)
+                                menu(p)
+                            }
                         }
-                    }
                 }
             }
         }
@@ -1222,11 +1210,9 @@ object PluginMenus {
         )(player, 1)
     }
 
-
-
-
     private val tempTeamChoices = mutableMapOf<String, MutableList<Team>>()
     fun showTeamMenu(player: Player) {
+        if (player.team() != Team.derelict || isBanned(player.uuid())) return
         val teamsWithCore = Team.all.filter { t -> t.data().hasCore() && t != Team.derelict }.toMutableList()
 
         if (teamsWithCore.isEmpty()) {
@@ -1436,7 +1422,7 @@ object PluginMenus {
 
 
     fun showRevertMenu(player: Player) {
-        verifyPermissionLevel(player, PermissionLevel.CORE_ADMIN) {
+        if (!isCoreAdmin(player.uuid())) return
             val revertPlayers = RevertBuild.getAllPlayersWithEdits()
             val btns = mutableListOf<MenuEntry>()
             btns.add(
@@ -1529,7 +1515,6 @@ object PluginMenus {
                 desc = { _, _, _ -> "" },
                 options = { _, _, _ -> btns }
             )(player, 1)
-        }
     }
 
 
@@ -1604,7 +1589,7 @@ object PluginMenus {
         }
 
         Groups.player.each { p ->
-            if (p != viewer && p != target && !p.dead() && isNormal(p.uuid())) {
+            if (p != viewer && p != target && !isBanned(p.uuid())) {
                 val title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", p)}${PluginVars.RESET}"
                 val desc = "\uE817 ${PluginVars.GRAY}${viewer.name} ${
                     I18nManager.get("playerInfo.votekick.desc", p)

@@ -1,6 +1,7 @@
 package plugin.snow
 
 import arc.util.CommandHandler
+import arc.util.Strings
 import arc.util.Time
 import mindustry.Vars.netServer
 import mindustry.game.Team
@@ -8,9 +9,9 @@ import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
 import plugin.core.*
+import plugin.core.PermissionManager.isBanned
 import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PermissionManager.isNormal
-import plugin.core.PermissionManager.verifyPermissionLevel
 import plugin.core.Translator.translate
 import plugin.snow.PluginMenus.beginVotekick
 import plugin.snow.PluginMenus.showConfirmMenu
@@ -31,7 +32,6 @@ object ClientCommands {
             name: String,
             args: String,
             desc: String,
-            required: PermissionLevel = PermissionLevel.NORMAL,
             exec: (Array<String>, Player) -> Unit
         ) {
             handler.register<Player>(
@@ -39,9 +39,8 @@ object ClientCommands {
                 args,
                 desc
             ) { args, player ->
-                verifyPermissionLevel(player, required) {
-                    exec(args, player)
-                }
+                if ( isBanned(player.uuid())) return@register
+                exec(args, player)
             }
         }
         register("help", "[page]", "helpCmd.help") { args, player ->
@@ -92,6 +91,10 @@ object ClientCommands {
             }
         }
         register("votekick", "[player] [reason]", "helpCmd.votekick") { args, player ->
+            if (args.isEmpty()) {
+                showVoteKickPlayerMenu(player)
+                return@register
+            }
             if (Groups.player.size() < 3) {
                 Call.announce(
                     player.con,
@@ -99,13 +102,19 @@ object ClientCommands {
                 )
                 return@register
             }
-            if (args.isEmpty()) {
-                showVoteKickPlayerMenu(player)
-                return@register
-            }
             val targetName = args[0]
-            val target =
-                Groups.player.find { it.name().equals(targetName, true) || it.name().contains(targetName, true) }
+
+            val target = if (
+                targetName.startsWith("#") &&
+                targetName.length > 1 &&
+                Strings.canParseInt(targetName.substring(1))
+            ) {
+                val id = Strings.parseInt(targetName.substring(1))
+                Groups.player.find { it?.id() == id }
+            } else {
+                Groups.player.find { it?.name?.contains(targetName, ignoreCase = true) == true }
+            }
+
             if (target == null || target == player) {
                 Call.announce(
                     player.con,
