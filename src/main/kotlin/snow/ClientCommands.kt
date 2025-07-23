@@ -66,6 +66,7 @@ object ClientCommands {
                 Call.announce(player.con, I18nManager.get("join.joined", player))
                 return@register
             }
+
             PluginMenus.showTeamMenu(player)
         }
         register("rules", "", "helpCmd.rules") { _, player ->
@@ -73,6 +74,9 @@ object ClientCommands {
         }
         register("upload", "", "helpCmd.upload") { _, player ->
             PluginMenus.showUploadMapMenu(player)
+        }
+        register("snapshot", "", "helpCmd.snapshot") { args, player ->
+            PluginMenus.showSnapshotMenu(player)
         }
         register("revert", "", "helpCmd.revert") { _, player ->
             PluginMenus.showRevertMenu(player)

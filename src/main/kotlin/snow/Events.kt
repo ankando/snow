@@ -74,7 +74,6 @@ object EventManager {
             PlayerTeamManager.clear()
             RevertBuild.clearAll()
             VoteManager.clearVote()
-            usedMaps.clear()
         }
 
         Events.on(PlayEvent::class.java) {
