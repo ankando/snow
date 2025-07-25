@@ -781,7 +781,6 @@ object PluginMenus {
                     .filter { it.text != "help" }
                     .filter { it.text != "t" }
                     .filter { it.text != "votekick" }
-                    .filter { it.text != "gameover" || player.admin }
                     .filter { it.text != "rules" || player.admin }
                     .filter { it.text != "revert" || player.admin }
                     .map { cmd ->
@@ -797,52 +796,64 @@ object PluginMenus {
         show(player, page)
     }
 
+    fun showRankMenu(player: Player, page: Int = 1) {
+        val pageSize = 50
 
-    fun showRankMenu(player: Player) {
         val rankMenu = MenusManage.createMenu<Unit>(
-            title = { player, _, _, _ ->
-                "${PluginVars.GRAY}${
-                    I18nManager.get("rank.title", player)
-                }${PluginVars.RESET}"
+            title = { p, pageNum, totalPages, _ ->
+                "${PluginVars.GRAY}${I18nManager.get("rank.title", p)} " +
+                        "$pageNum/$totalPages${PluginVars.RESET}"
             },
-            perPage = 50,
-            desc = { player, _, _ ->
-                val ranked = DataManager.players.values().filter { it.score > 0 }
+            perPage = pageSize,
+            paged  = true,
+
+            desc = { p, pageNum, _ ->
+                val ranked = DataManager.players.values()
+                    .filter { it.score > 0 }
                     .sortedByDescending { it.score }
-                val myAcc = ranked.find { it.uuids.any { uuid -> uuid == player.uuid() } }
+
+                val myAcc   = ranked.find { it.uuids.any { uuid -> uuid == p.uuid() } }
                 val myScore = myAcc?.score ?: 0
-                val myRank = if (myAcc != null) ranked.indexOfFirst { it.id == myAcc.id } + 1 else 0
+                val myRank  = myAcc?.let { ranked.indexOf(it) + 1 } ?: 0
+
+                val start = (pageNum - 1) * pageSize
+                val end   = minOf(start + pageSize, ranked.size)
+                val pageList = ranked.subList(start, end)
 
                 buildString {
                     if (myScore > 0) {
                         append(
-                            "\n${PluginVars.GRAY}${
-                                I18nManager.get(
-                                    "rank.your_rank",
-                                    player
-                                )
-                            } ${PluginVars.INFO}$myRank/${ranked.size} | $myScore${PluginVars.RESET}\n\n"
+                            "\n${PluginVars.GRAY}${I18nManager.get("rank.your_rank", p)} " +
+                                    "${PluginVars.INFO}$myRank/${ranked.size} | $myScore${PluginVars.RESET}\n\n"
                         )
                     } else {
-                        append("\n${PluginVars.INFO}${I18nManager.get("rank.nopoints", player)}${PluginVars.RESET}\n\n")
+                        append("\n${PluginVars.INFO}" +
+                                I18nManager.get("rank.nopoints", p) +
+                                "${PluginVars.RESET}\n\n")
                     }
-                    ranked.take(50).forEachIndexed { i, acc ->
-                        val nick = acc.account.ifBlank { I18nManager.get("rank.unknown", player) }
-                        val numColor   = if (i < 3) PluginVars.GOLD else PluginVars.INFO
-                        val scoreColor = if (i < 3) PluginVars.GOLD else PluginVars.INFO
+
+                    pageList.forEachIndexed { i, acc ->
+                        val nick          = acc.account.ifBlank { I18nManager.get("rank.unknown", p) }
+                        val absoluteIndex = start + i
+                        val numColor      = if (absoluteIndex < 3) PluginVars.GOLD else PluginVars.INFO
+                        val scoreColor    = if (absoluteIndex < 3) PluginVars.GOLD else PluginVars.INFO
 
                         append(
-                            "$numColor${i + 1}. $nick: $scoreColor${acc.score}${PluginVars.RESET}\n"
+                            "$numColor${absoluteIndex + 1}. $nick: " +
+                                    "$scoreColor${acc.score}${PluginVars.RESET}\n"
                         )
                     }
-
                 }
             },
-            paged = false,
+
             options = { _, _, _ -> emptyList() }
+
         )
-        rankMenu(player, 1)
+
+        rankMenu(player, page)
     }
+
+
 
     fun showLogoutMenu(player: Player) {
         val uuid = player.uuid()
