@@ -106,11 +106,19 @@ object DataManager {
     }
 
     private fun loadConfig() {
-        if (!configFile.exists()) return
+        if (!configFile.exists()) {
+            val default = ConfigJson()
+            configFile.writeString(json.toJson(default), false)
+            webUrl = default.webUrl
+            webPort = default.webPort
+            return
+        }
+
         val conf = json.fromJson(ConfigJson::class.java, configFile.readString())
         webUrl = conf.webUrl
         webPort = conf.webPort
     }
+
 
     fun registerPlayer(
         account: String,
