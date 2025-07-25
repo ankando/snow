@@ -843,30 +843,7 @@ object PluginMenus {
         )
         rankMenu(player, 1)
     }
-    fun showGameOverMenu(player: Player) {
-        if (!isCoreAdmin(player.uuid())) {
-            Call.announce(player.con,
-                "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
-            return
-        }
 
-        val teams = Team.all.filter { it == Team.derelict || it.data().hasCore() }
-
-        val rows = teams.map { team ->
-            MenuEntry("${PluginVars.WHITE}${team.coloredName()}${PluginVars.RESET}") {
-                Events.fire(EventType.GameOverEvent(team))
-            }
-        }
-
-        MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ ->
-                "${PluginVars.GRAY}${I18nManager.get("gameover.title", player)}${PluginVars.RESET}"
-            },
-            desc  = { _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("gameover.desc", player)}${PluginVars.RESET}"  },
-            paged = false,
-            options = { _, _, _ -> rows }
-        )(player, 1)
-    }
     fun showLogoutMenu(player: Player) {
         val uuid = player.uuid()
         val acc = DataManager.getPlayerDataByUuid(uuid)
