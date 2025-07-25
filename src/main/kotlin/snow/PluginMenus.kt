@@ -1092,8 +1092,12 @@ object PluginMenus {
 
     fun showMapListMenu(player: Player, mode: Gamemode?, page: Int = 1) {
         val allMaps = Vars.maps.customMaps().toList()
-        val filtered = if (mode == null) allMaps
-        else allMaps.filter { TagUtil.getMode(it.description()) == mode }
+        val filtered = if (mode == null) allMaps else allMaps.filter {
+            val fileName = it.file.name()
+            val mapDataMode = DataManager.maps[fileName]?.modeName?.lowercase()
+            val tagMode = TagUtil.getMode(it.description())?.name?.lowercase()
+            (mapDataMode ?: tagMode) == mode.name.lowercase()
+        }
 
         if (filtered.isEmpty()) {
             Call.announce(player.con,
@@ -1151,11 +1155,10 @@ object PluginMenus {
     }
 
 
-
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
         val isAdmin = isCoreAdmin(player.uuid())
         val normalCount = Groups.player.count { isNormal(it.uuid()) }
-        val mapMode      = TagUtil.getMode(map.description())
+        val mapMode = TagUtil.getMode(map.description())
         val isOk = isAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
@@ -1167,9 +1170,18 @@ object PluginMenus {
             uploaderData?.account
         } ?: I18nManager.get("unknown", player)
 
+        val modeRaw = DataManager.maps[mapFileName]?.modeName ?: ""
+        val modeName = when (modeRaw.lowercase()) {
+            "pvp" -> I18nManager.get("mode.pvp", player)
+            "survival" -> I18nManager.get("mode.survival", player)
+            "attack" -> I18nManager.get("mode.attack", player)
+            "sandbox" -> I18nManager.get("mode.sandbox", player)
+            else -> I18nManager.get("mode.unknown", player)
+        }
 
         val desc = buildString {
             append("\n${PluginVars.SECONDARY}${I18nManager.get("mapInfo.uploader", player)}: $uploaderName${PluginVars.RESET}\n")
+            append("\n${PluginVars.GRAY}$modeName${PluginVars.RESET}\n")
             append("\n${PluginVars.SECONDARY}${map.author() ?: I18nManager.get("unknown", player)}${PluginVars.RESET}\n")
             append("\n${PluginVars.GRAY}${map.description()}${PluginVars.RESET}\n")
         }
@@ -1293,6 +1305,17 @@ object PluginMenus {
             }
         }
 
+        val btnSelectMode = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapInfo.selectmode", player)}${PluginVars.RESET}") {
+            if (isAdmin || uploaderId == DataManager.getIdByUuid(player.uuid())) {
+                showSelectModeMenu(player, map)
+            } else {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}"
+                )
+            }
+        }
+
         val rows = mutableListOf<MenuEntry>()
 
         if (isAdmin || mapMode != null) {
@@ -1305,6 +1328,9 @@ object PluginMenus {
             rows += btnDelete
         }
 
+        if (isAdmin || uploaderId == DataManager.getIdByUuid(player.uuid())) {
+            rows += btnSelectMode
+        }
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
@@ -1312,6 +1338,46 @@ object PluginMenus {
             desc = { _, _, _ -> desc },
             options = { _, _, _ -> rows }
         )(player, 1)
+    }
+
+    fun showSelectModeMenu(player: Player, map: mindustry.maps.Map) {
+        val currentMode = DataManager.maps[map.file.name()]?.modeName ?: "unknown"
+
+        val modeDesc = when (currentMode) {
+            "pvp" -> I18nManager.get("mode.pvp", player)
+            "survival" -> I18nManager.get("mode.survival", player)
+            "attack" -> I18nManager.get("mode.attack", player)
+            "sandbox" -> I18nManager.get("mode.sandbox", player)
+            else -> I18nManager.get("mode.unknown", player)
+        }
+
+        val modeButtons = listOf(
+            Gamemode.pvp to I18nManager.get("mode.pvp", player),
+            Gamemode.survival to I18nManager.get("mode.survival", player),
+            Gamemode.attack to I18nManager.get("mode.attack", player),
+            Gamemode.sandbox to I18nManager.get("mode.sandbox", player)
+        )
+
+        val rows = modeButtons.map { (mode, label) ->
+            MenuEntry(label) {
+                updateMapMode(map, mode)
+                Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("mapInfo.modechanged", player)} ${label}${PluginVars.RESET}")
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
+            paged = false,
+            desc = { _, _, _ -> "${PluginVars.SECONDARY}${I18nManager.get("mapInfo.currentmode", player)}: $modeDesc${PluginVars.RESET}" },  // 动态描述内容
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+
+    fun updateMapMode(map: mindustry.maps.Map, newMode: Gamemode) {
+        val mapFileName = map.file.name()
+        DataManager.maps[mapFileName]?.modeName = newMode.name
+        DataManager.requestSave()
     }
 
     fun showLanguageMenu(player: Player) {

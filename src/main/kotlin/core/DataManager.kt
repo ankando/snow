@@ -1,6 +1,7 @@
 package plugin.core
 
 import arc.struct.ObjectMap
+import arc.util.Log
 import arc.util.serialization.Json
 import mindustry.Vars
 
@@ -30,9 +31,11 @@ data class PlayerData(
 }
 
 data class MapData(
-    val name: String,
-    var uploaderId: Int
+    val fileName: String,
+    var uploaderId: Int,
+    var modeName: String? = null
 )
+
 
 data class ConfigJson(
     val webUrl: String = "127.0.0.1",
@@ -94,16 +97,35 @@ object DataManager {
     }
 
     private fun loadMaps() {
-        if (!mapsFile.exists()) return
-        val root = json.fromJson(java.util.LinkedHashMap::class.java, mapsFile.readString()) as Map<*, *>
         maps.clear()
-        for ((k, v) in root) {
-            val name = k?.toString() ?: continue
-            val js = v as? Map<*, *> ?: continue
-            val uploaderId = (js["uploaderId"] as? Number)?.toInt() ?: 0
-            maps.put(name, MapData(name, uploaderId))
+        Vars.maps.customMaps().forEach { map ->
+            val name = map.file.name()
+            maps.put(name, MapData(name, uploaderId = 0, modeName = null))
+        }
+
+        if (mapsFile.exists()) {
+            val root = json.fromJson(java.util.LinkedHashMap::class.java, mapsFile.readString()) as Map<*, *>
+            for ((k, v) in root) {
+                val name = k?.toString() ?: continue
+                val js = v as? Map<*, *> ?: continue
+                val uploaderId = (js["uploaderId"] as? Number)?.toInt() ?: 0
+                val modeName = js["modeName"]?.toString()
+
+                maps[name]?.apply {
+                    this.uploaderId = uploaderId
+                    this.modeName = modeName
+                }
+            }
+        }
+        for (map in Vars.maps.customMaps()) {
+            val tagMode = TagUtil.getMode(map.description())
+            if (tagMode != null) {
+                maps[map.file.name()]?.modeName = tagMode.name.lowercase()
+            }
         }
     }
+
+
 
     private fun loadConfig() {
         if (!configFile.exists()) {
@@ -185,8 +207,9 @@ object DataManager {
         val mapsOut = java.util.LinkedHashMap<String, Any>()
         maps.forEach {
             mapsOut[it.key] = mapOf(
-                "name" to it.value.name,
-                "uploaderId" to it.value.uploaderId
+                "fileName" to it.value.fileName,
+                "uploaderId" to it.value.uploaderId,
+                "modeName" to it.value.modeName
             )
         }
         mapsFile.writeString(json.toJson(mapsOut))

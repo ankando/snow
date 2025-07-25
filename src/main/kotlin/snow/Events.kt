@@ -85,14 +85,20 @@ object EventManager {
 
         Events.on(PlayEvent::class.java) {
             val currentMap  = Vars.state.map
-            val currentMode = getMode(currentMap.description())
 
-            currentMode?.let { Vars.state.rules = currentMap.applyRules(it) }
+            val mapDataMode = DataManager.maps[currentMap.file.name()]?.modeName
+                ?.lowercase()
+                ?.takeIf { name -> Gamemode.entries.any { it.name == name } }
+                ?.let { Gamemode.valueOf(it) }
+
+            val tagMode = getMode(currentMap.description())
+
+            val targetMode = mapDataMode ?: tagMode
+
+
+
+            targetMode?.let { Vars.state.rules = currentMap.applyRules(it) }
             Vars.state.rules.pvpAutoPause = false
-
-            val targetMode = currentMode
-                ?: Vars.maps.customMaps().firstNotNullOfOrNull { getMode(it.description()) }
-                ?: return@on
 
             if (currentRotationMode != targetMode) {
                 UsedMaps.clear()
@@ -102,12 +108,22 @@ object EventManager {
             UsedMaps.add(currentMap)
 
             val allMapsByMode = Vars.maps.customMaps()
-                .groupBy { getMode(it.description()) }
-                .filterKeys { it != null }
-                .mapKeys { it.key!! }
+                .mapNotNull { map ->
+                    val fileName = map.file.name()
+                    val mapDataMode = DataManager.maps[fileName]?.modeName
+                        ?.lowercase()
+                        ?.takeIf { name -> Gamemode.entries.any { it.name == name } }
+                        ?.let { Gamemode.valueOf(it) }
+
+                    val tagMode = getMode(map.description())
+                    val finalMode = mapDataMode ?: tagMode
+
+                    finalMode?.let { it to map }
+                }
+                .groupBy({ it.first }, { it.second })
 
             if (allMapsByMode.isEmpty()) {
-                val fallback = if (Vars.maps.customMaps().isEmpty())
+                val fallback = if (Vars.maps.customMaps().isEmpty)
                     Vars.maps.all().random()
                 else
                     Vars.maps.customMaps().random()
@@ -146,6 +162,7 @@ object EventManager {
                 NextMap.set(it)
             }
         }
+
 
 
     }
