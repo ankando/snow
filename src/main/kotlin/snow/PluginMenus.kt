@@ -769,6 +769,33 @@ object PluginMenus {
         )
     }
 
+    fun showGameOverMenu(player: Player) {
+        if (!isCoreAdmin(player.uuid())) {
+            Call.announce(player.con,
+                "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+            return
+        }
+
+        val teams = Team.all.filter { it == Team.derelict || it.data().hasCore() }
+
+        val rows = teams.map { team ->
+            MenuEntry("${PluginVars.WHITE}${team.coloredName()}${PluginVars.RESET}") {
+                showConfirmMenu(player) {
+                    Events.fire(EventType.GameOverEvent(team))
+                }
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ ->
+                "${PluginVars.GRAY}${I18nManager.get("gameover.title", player)}${PluginVars.RESET}"
+            },
+            desc  = { _, _, _ -> "" },
+            paged = false,
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
     fun showHelpMenu(player: Player, page: Int = 1) {
         val show = MenusManage.createMenu<Unit>(
             title = { p, pageNum, total, _ ->
@@ -781,6 +808,7 @@ object PluginMenus {
                     .filter { it.text != "help" }
                     .filter { it.text != "t" }
                     .filter { it.text != "votekick" }
+                    .filter { it.text != "over" || player.admin }
                     .filter { it.text != "rules" || player.admin }
                     .filter { it.text != "revert" || player.admin }
                     .map { cmd ->
@@ -796,64 +824,51 @@ object PluginMenus {
         show(player, page)
     }
 
-    fun showRankMenu(player: Player, page: Int = 1) {
-        val pageSize = 50
-
+    fun showRankMenu(player: Player) {
         val rankMenu = MenusManage.createMenu<Unit>(
-            title = { p, pageNum, totalPages, _ ->
-                "${PluginVars.GRAY}${I18nManager.get("rank.title", p)} " +
-                        "$pageNum/$totalPages${PluginVars.RESET}"
+            title = { player, _, _, _ ->
+                "${PluginVars.GRAY}${
+                    I18nManager.get("rank.title", player)
+                }${PluginVars.RESET}"
             },
-            perPage = pageSize,
-            paged  = true,
-
-            desc = { p, pageNum, _ ->
-                val ranked = DataManager.players.values()
-                    .filter { it.score > 0 }
+            perPage = 50,
+            desc = { player, _, _ ->
+                val ranked = DataManager.players.values().filter { it.score > 0 }
                     .sortedByDescending { it.score }
-
-                val myAcc   = ranked.find { it.uuids.any { uuid -> uuid == p.uuid() } }
+                val myAcc = ranked.find { it.uuids.any { uuid -> uuid == player.uuid() } }
                 val myScore = myAcc?.score ?: 0
-                val myRank  = myAcc?.let { ranked.indexOf(it) + 1 } ?: 0
-
-                val start = (pageNum - 1) * pageSize
-                val end   = minOf(start + pageSize, ranked.size)
-                val pageList = ranked.subList(start, end)
+                val myRank = if (myAcc != null) ranked.indexOfFirst { it.id == myAcc.id } + 1 else 0
 
                 buildString {
                     if (myScore > 0) {
                         append(
-                            "\n${PluginVars.GRAY}${I18nManager.get("rank.your_rank", p)} " +
-                                    "${PluginVars.INFO}$myRank/${ranked.size} | $myScore${PluginVars.RESET}\n\n"
+                            "\n${PluginVars.GRAY}${
+                                I18nManager.get(
+                                    "rank.your_rank",
+                                    player
+                                )
+                            } ${PluginVars.INFO}$myRank/${ranked.size} | $myScore${PluginVars.RESET}\n\n"
                         )
                     } else {
-                        append("\n${PluginVars.INFO}" +
-                                I18nManager.get("rank.nopoints", p) +
-                                "${PluginVars.RESET}\n\n")
+                        append("\n${PluginVars.INFO}${I18nManager.get("rank.nopoints", player)}${PluginVars.RESET}\n\n")
                     }
-
-                    pageList.forEachIndexed { i, acc ->
-                        val nick          = acc.account.ifBlank { I18nManager.get("rank.unknown", p) }
-                        val absoluteIndex = start + i
-                        val numColor      = if (absoluteIndex < 3) PluginVars.GOLD else PluginVars.INFO
-                        val scoreColor    = if (absoluteIndex < 3) PluginVars.GOLD else PluginVars.INFO
+                    ranked.take(50).forEachIndexed { i, acc ->
+                        val nick = acc.account.ifBlank { I18nManager.get("rank.unknown", player) }
+                        val numColor   = if (i < 3) PluginVars.GOLD else PluginVars.INFO
+                        val scoreColor = if (i < 3) PluginVars.GOLD else PluginVars.INFO
 
                         append(
-                            "$numColor${absoluteIndex + 1}. $nick: " +
-                                    "$scoreColor${acc.score}${PluginVars.RESET}\n"
+                            "$numColor${i + 1}. $nick: $scoreColor${acc.score}${PluginVars.RESET}\n"
                         )
                     }
+
                 }
             },
-
+            paged = false,
             options = { _, _, _ -> emptyList() }
-
         )
-
-        rankMenu(player, page)
+        rankMenu(player, 1)
     }
-
-
 
     fun showLogoutMenu(player: Player) {
         val uuid = player.uuid()
@@ -1266,6 +1281,21 @@ object PluginMenus {
             }
         }
 
+        val isNextMap = try {
+            NextMap.get() == map
+        } catch (_: Exception) { false }
+
+        val canEdit  = (isAdmin || uploaderId == DataManager.getIdByUuid(player.uuid())) && !isNextMap
+
+        val btnEdit  = MenuEntry(
+            "${if (canEdit) strong else weak}${I18nManager.get("mapInfo.edit", player)}${PluginVars.RESET}"
+        ) {
+            if (!canEdit) {
+                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+                return@MenuEntry
+            }
+            showMapEditWizard(player, map)
+        }
         val rows = mutableListOf<MenuEntry>()
 
         if (isAdmin || mapMode != null) {
@@ -1278,6 +1308,7 @@ object PluginMenus {
             rows += btnDelete
         }
 
+        if (canEdit) rows += btnEdit
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
@@ -1287,6 +1318,64 @@ object PluginMenus {
         )(player, 1)
     }
 
+    fun showMapEditWizard(player: Player, map: mindustry.maps.Map) {
+        val uploaderId = DataManager.maps[map.file.name()]?.uploaderId
+        val canEdit = player.admin() || uploaderId == DataManager.getIdByUuid(player.uuid())
+        if (!canEdit) {
+            Call.announce(player.con,
+                "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+            return
+        }
+
+        val btnName = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapEdit.name", player)}${PluginVars.RESET}") {
+            MenusManage.createTextInput(
+                title       = I18nManager.get("mapEdit.name.title", player),
+                desc        = I18nManager.get("mapEdit.name.desc", player),
+                isNum       = false,
+                placeholder = map.name()
+            ) { _, input ->
+                val txt = input.trim()
+                if (txt.isNotBlank()) {
+                    EditMaps.requestEdit(player, map, newName = txt)
+                }
+            }(player)
+        }
+
+        val btnDesc = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapEdit.desc", player)}${PluginVars.RESET}") {
+            MenusManage.createTextInput(
+                title       = I18nManager.get("mapEdit.desc.title", player),
+                desc        = I18nManager.get("mapEdit.desc.desc", player),
+                isNum       = false,
+                placeholder = map.description() ?: ""
+            ) { _, input ->
+                val txt = input.trim()
+                if (txt.isNotBlank()) {
+                    EditMaps.requestEdit(player, map, newDesc = txt)
+                }
+            }(player)
+        }
+
+        val btnAuthor = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapEdit.author", player)}${PluginVars.RESET}") {
+            MenusManage.createTextInput(
+                title       = I18nManager.get("mapEdit.author.title", player),
+                desc        = I18nManager.get("mapEdit.author.desc", player),
+                isNum       = false,
+                placeholder = map.author() ?: ""
+            ) { _, input ->
+                val txt = input.trim()
+                if (txt.isNotBlank()) {
+                    EditMaps.requestEdit(player, map, newAuthor = txt)
+                }
+            }(player)
+        }
+
+        MenusManage.createMenu<Unit>(
+            title   = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
+            paged   = false,
+            desc    = { _, _, _ -> "" },
+            options = { _, _, _ -> listOf(btnName, btnDesc, btnAuthor) }
+        )(player, 1)
+    }
 
     fun showLanguageMenu(player: Player) {
         val acc = DataManager.getPlayerDataByUuid(player.uuid()) ?: return
@@ -1430,6 +1519,7 @@ object PluginMenus {
                 "${PluginVars.SUCCESS}${I18nManager.get("profile.lock.success", player)}${PluginVars.RESET}"
             )
         }
+
 
         val rows = listOf(btnLogout, btnUsername, btnPassword, btnLang, btnLock)
 
@@ -1866,6 +1956,5 @@ object PluginMenus {
             }
         )(player)
     }
-
 
 }

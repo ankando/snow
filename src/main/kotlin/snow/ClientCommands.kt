@@ -84,6 +84,9 @@ object ClientCommands {
         register("profile", "", "helpCmd.profile") { _, player ->
             PluginMenus.showSetProfileMenu(player)
         }
+        register("over", "", "helpCmd.over") { _, player ->
+            PluginMenus.showGameOverMenu(player)
+        }
         register("sync", "", "helpCmd.sync") { _, player ->
             if (!player.isLocal) {
                 if (Time.timeSinceMillis(player.info.lastSyncTime) < 1000 * 5) {

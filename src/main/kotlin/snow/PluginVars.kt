@@ -4,7 +4,7 @@ object PluginVars {
 
     const val MENU_BUTTONS_PER_PAGE = 10
     const val MENU_CONFIRM_TIMEOUT_SEC = 21L
-    const val MENU_TEXT_INPUT_MAX_CHARS = 32
+    const val MENU_TEXT_INPUT_MAX_CHARS = 100
     const val RATIO = 0.65
     const val TEAM_RATIO = 0.7
 
@@ -12,7 +12,6 @@ object PluginVars {
     const val GRAY = "[#D0D0D0EE]"
     const val INFO = "[#E0E0E0EE]"
     const val GOLD = "[#FFE9AAEE]"
-    const val BLUE = "[#E0E0AAEE]"
     const val SECONDARY = "[#B0B0B0DD]"
     const val ERROR = "[#A0A0A0DD]"
     const val SUCCESS = "[#BEBEBEDD]"
