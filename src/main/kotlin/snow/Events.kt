@@ -104,11 +104,16 @@ object EventManager {
                 .mapKeys { it.key!! }
 
             if (allMapsByMode.isEmpty()) {
-                val fallback = Vars.maps.all().random()
+                val fallback = if (Vars.maps.customMaps().isEmpty)
+                    Vars.maps.all().random()
+                else
+                    Vars.maps.customMaps().random()
+
                 Vars.maps.setNextMapOverride(fallback)
                 NextMap.set(fallback)
                 return@on
             }
+
 
             val startIndex = modeRotation.indexOf(targetMode).let { if (it >= 0) it else 0 }
 

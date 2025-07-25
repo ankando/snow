@@ -774,19 +774,20 @@ object PluginMenus {
             title = { p, pageNum, total, _ ->
                 "${PluginVars.GRAY}${I18nManager.get("help.title", p)} $pageNum/$total${PluginVars.RESET}"
             },
-            desc = { p, _, _ -> ""
-            },
+            desc = { _, _, _ -> "" },
             options = { p, _, _ ->
                 Vars.netServer.clientCommands.commandList
                     .sortedBy { it.text }
                     .filter { it.text != "help" }
                     .filter { it.text != "t" }
                     .filter { it.text != "votekick" }
+                    .filter { it.text != "gameover" || player.admin }
+                    .filter { it.text != "rules" || player.admin }
+                    .filter { it.text != "revert" || player.admin }
                     .map { cmd ->
                         val descKey = "helpCmd.${cmd.text}"
                         val desc = I18nManager.get(descKey, p)
-                        MenuEntry("${PluginVars.INFO}$desc${PluginVars.RESET}"
-                        ) { player ->
+                        MenuEntry("${PluginVars.INFO}$desc${PluginVars.RESET}") { player ->
                             NetClient.sendChatMessage(player, "/${cmd.text}")
                         }
                     }
@@ -795,6 +796,7 @@ object PluginMenus {
 
         show(player, page)
     }
+
 
     fun showRankMenu(player: Player) {
         val rankMenu = MenusManage.createMenu<Unit>(
