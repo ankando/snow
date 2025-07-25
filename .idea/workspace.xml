@@ -8,24 +8,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ce39ab6a-a286-4522-918b-e2a246d6ac40" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main/kotlin/core/NextMap.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/kotlin/core/TagUtil.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/kotlin/core/UsedMaps.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/8.10.2/executionHistory/executionHistory.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.10.2/executionHistory/executionHistory.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/8.10.2/fileHashes/fileHashes.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.10.2/fileHashes/fileHashes.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gradle/file-system.probe" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/file-system.probe" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/kotlin/snow/ClientCommands.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/snow/ClientCommands.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/kotlin/snow/Events.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/snow/Events.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/kotlin/snow/PluginMenus.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/snow/PluginMenus.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/kotlin/snow/PluginVars.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/kotlin/snow/PluginVars.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/bundle.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/bundle.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/bundle_ja.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/bundle_ja.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/bundle_ko.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/bundle_ko.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/bundle_ru.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/bundle_ru.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/bundle_zh.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/bundle_zh.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

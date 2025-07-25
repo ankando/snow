@@ -103,6 +103,13 @@ object EventManager {
                 .filterKeys { it != null }
                 .mapKeys { it.key!! }
 
+            if (allMapsByMode.isEmpty()) {
+                val fallback = Vars.maps.all().random()
+                Vars.maps.setNextMapOverride(fallback)
+                NextMap.set(fallback)
+                return@on
+            }
+
             val startIndex = modeRotation.indexOf(targetMode).let { if (it >= 0) it else 0 }
 
             for (i in modeRotation.indices) {
