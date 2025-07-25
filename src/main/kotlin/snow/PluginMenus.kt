@@ -6,6 +6,7 @@ import mindustry.Vars
 import mindustry.content.Blocks
 import mindustry.core.NetClient
 import mindustry.game.EventType
+import mindustry.game.Gamemode
 import mindustry.game.Rules
 import mindustry.game.Team
 import mindustry.gen.Call
@@ -40,6 +41,11 @@ object PluginMenus {
             val ts = System.currentTimeMillis()
             val file = snapshotFolder.child("$ts.msav")
             if (!isCoreAdmin(player.uuid())) {
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                    return@MenuEntry
+                }
+
                 showConfirmMenu(player) {
                     VoteManager.createGlobalVote(creator = player) { ok ->
                         if (ok && Vars.state.isGame) {
@@ -110,6 +116,11 @@ object PluginMenus {
                     Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("noPoints", player)}${PluginVars.RESET}")
                     return@MenuEntry
                 }
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                    return@MenuEntry
+                }
+
                 showConfirmMenu(player) {
                     VoteManager.createGlobalVote(creator = player) { ok ->
                         if (ok && Vars.state.isGame) loadSnapshot(file)
@@ -830,7 +841,30 @@ object PluginMenus {
         )
         rankMenu(player, 1)
     }
+    fun showGameOverMenu(player: Player) {
+        if (!isCoreAdmin(player.uuid())) {
+            Call.announce(player.con,
+                "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+            return
+        }
 
+        val teams = Team.all.filter { it == Team.derelict || it.data().hasCore() }
+
+        val rows = teams.map { team ->
+            MenuEntry("${PluginVars.WHITE}${team.coloredName()}${PluginVars.RESET}") {
+                Events.fire(EventType.GameOverEvent(team))
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ ->
+                "${PluginVars.GRAY}${I18nManager.get("gameover.title", player)}${PluginVars.RESET}"
+            },
+            desc  = { _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("gameover.desc", player)}${PluginVars.RESET}"  },
+            paged = false,
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
     fun showLogoutMenu(player: Player) {
         val uuid = player.uuid()
         val acc = DataManager.getPlayerDataByUuid(uuid)
@@ -948,6 +982,10 @@ object PluginMenus {
                 )
                 return@MenuEntry
             }
+            if (VoteManager.globalVoteSession != null) {
+                Call.announce(viewer.con, "${PluginVars.WARN}${I18nManager.get("vote.running", viewer)}${PluginVars.RESET}")
+                return@MenuEntry
+            }
             showConfirmMenu(viewer) {
                 beginVotekick(viewer, target)
             }
@@ -1000,41 +1038,6 @@ object PluginMenus {
         )(viewer, 1)
     }
 
-    fun showMapMenu(player: Player, page: Int = 1) {
-        val mapMenu = MenusManage.createMenu<Unit>(
-            title = { _, page, total, _ ->
-                "${PluginVars.GRAY}${
-                    I18nManager.get(
-                        "map.title",
-                        player
-                    )
-                } $page/$total${PluginVars.RESET}"
-            },
-            desc = { _, _, _ -> "" },
-            options = { _, _, _ ->
-                val current = Vars.state.map
-                val maps = Vars.maps.customMaps().toList()
-
-                val sortedMaps = maps.sortedWith(compareByDescending { it.file.name() == current.file.name() })
-
-                var displayIndex = 1
-
-                sortedMaps.map { map ->
-                    val isCurrent = map.file.name() == current.file.name()
-                    val prefix = if (isCurrent) "${PluginVars.SECONDARY}\uE809 " else "${PluginVars.WHITE}\uF029"
-                    val label = if (isCurrent) {
-                        "$prefix${map.name()}${PluginVars.RESET}"
-                    } else {
-                        "$prefix${displayIndex++} ${map.name()}${PluginVars.RESET}"
-                    }
-                    MenuEntry(label) {
-                        showMapOptionMenu(player, map)
-                    }
-                }
-            }
-        )
-        mapMenu(player, page)
-    }
 
 
     private fun reloadWorld(map: mindustry.maps.Map) {
@@ -1048,10 +1051,94 @@ object PluginMenus {
         Events.fire(EventType.GameOverEvent(Team.derelict))
     }
 
+    fun showMapMenu(player: Player, page: Int = 1) {
+        val modeItems: List<Pair<Gamemode?, String>> = listOf(
+            Gamemode.pvp      to I18nManager.get("mode.pvp", player),
+            Gamemode.survival to I18nManager.get("mode.survival", player),
+            Gamemode.attack   to I18nManager.get("mode.attack", player),
+            Gamemode.sandbox  to I18nManager.get("mode.sandbox", player),
+            null              to I18nManager.get("map.all", player)
+        )
+
+        val rows = modeItems.map { (mode, text) ->
+            MenuEntry("${PluginVars.WHITE}$text${PluginVars.RESET}") {
+                showMapListMenu(player, mode, 1)
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, p, t, _ -> "${PluginVars.GRAY}${I18nManager.get("map.mode.choose", player)} $p/$t${PluginVars.RESET}" },
+            desc  = { _, _, _ -> "" },
+            paged = false,
+            options = { _, _, _ -> rows }
+        )(player, page)
+    }
+
+    private fun i18nMode(mode: Gamemode, player: Player): String = when (mode) {
+        Gamemode.pvp      -> I18nManager.get("mode.pvp", player)
+        Gamemode.survival -> I18nManager.get("mode.survival", player)
+        Gamemode.attack   -> I18nManager.get("mode.attack", player)
+        Gamemode.sandbox  -> I18nManager.get("mode.sandbox", player)
+        else              -> I18nManager.get("mode.unknown", player)
+    }
+
+    fun showMapListMenu(player: Player, mode: Gamemode?, page: Int = 1) {
+        val allMaps = Vars.maps.customMaps().toList()
+        val filtered = if (mode == null) allMaps
+        else allMaps.filter { TagUtil.getMode(it.description()) == mode }
+
+        if (filtered.isEmpty()) {
+            Call.announce(player.con,
+                "${PluginVars.WARN}${I18nManager.get("map.none", player)}${PluginVars.RESET}")
+            return
+        }
+
+        val current = Vars.state.map
+        val nextMap = NextMap.get()
+        var index   = 1
+
+        val rows = filtered.map { map ->
+            val isCurrent = map == current
+            val isNext    = map == nextMap
+            val icon = when {
+                isCurrent -> "\uE829"
+                isNext    -> "\uE809"
+                else      -> "\uF029"
+            }
+
+            val mapMode = TagUtil.getMode(map.description())
+            val used    = UsedMaps.isUsed(map)
+            val color   = if (used) PluginVars.SECONDARY else PluginVars.WHITE
+
+            val label = buildString {
+                append("$color$icon$index ${map.name()}${PluginVars.RESET}")
+                if (mode == null && mapMode != null) {
+                    append("\n${PluginVars.SECONDARY}${i18nMode(mapMode, player)}${PluginVars.RESET}")
+                }
+            }
+
+            index++
+            MenuEntry(label) { showMapOptionMenu(player, map) }
+        }
+
+        val title = if (mode == null)
+            I18nManager.get("map.all", player)
+        else
+            i18nMode(mode, player)
+
+        MenusManage.createMenu<Unit>(
+            title   = { _, p, t, _ -> "${PluginVars.GRAY}$title $p/$t${PluginVars.RESET}" },
+            desc    = { _, _, _ -> "" },
+            paged   = true,
+            options = { _, _, _ -> rows }
+        )(player, page)
+    }
+
 
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
         val isAdmin = isCoreAdmin(player.uuid())
         val normalCount = Groups.player.count { isNormal(it.uuid()) }
+        val mapMode      = TagUtil.getMode(map.description())
         val isOk = isAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
@@ -1081,6 +1168,10 @@ object PluginMenus {
                 val points = DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0
                 if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60 && points < 150) {
                     Call.announce(player.con, "${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
+                    return@MenuEntry
+                }
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
                     return@MenuEntry
                 }
 
@@ -1139,6 +1230,7 @@ object PluginMenus {
             if (isOk) {
                 showConfirmMenu(player) {
                     Vars.maps.setNextMapOverride(map)
+                    NextMap.set(map)
                     Call.announce(
                         player.con,
                         "${PluginVars.SUCCESS}${I18nManager.get("mapInfo.nextset", player)}${PluginVars.RESET}"
@@ -1184,7 +1276,11 @@ object PluginMenus {
             }
         }
 
-        val rows = mutableListOf(btnVote)
+        val rows = mutableListOf<MenuEntry>()
+
+        if (isAdmin || mapMode != null) {
+            rows += btnVote
+        }
 
         if (isAdmin) {
             rows += btnChange
@@ -1707,6 +1803,10 @@ object PluginMenus {
         }
         val rows = kickablePlayers.map { target ->
             MenuEntry("${PluginVars.WHITE}${target.name()}${PluginVars.RESET}") {
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                    return@MenuEntry
+                }
                 showConfirmMenu(player) {
                     beginVotekick(player, target)
                 }

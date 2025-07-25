@@ -78,6 +78,9 @@ object ClientCommands {
         register("snapshot", "", "helpCmd.snapshot") { args, player ->
             PluginMenus.showSnapshotMenu(player)
         }
+        register("gameover", "", "helpCmd.gameover") { args, player ->
+            PluginMenus.showGameOverMenu(player)
+        }
         register("revert", "", "helpCmd.revert") { _, player ->
             PluginMenus.showRevertMenu(player)
         }
