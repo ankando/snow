@@ -2,7 +2,6 @@ package plugin.snow
 
 import arc.util.Timer
 import plugin.core.DataManager
-import plugin.core.EditMaps.applyEdit
 import plugin.core.VoteManager
 
 object TimerManager {
@@ -16,6 +15,5 @@ object TimerManager {
         if (DataManager.needSave) {
             DataManager.saveAll()
         }
-        applyEdit()
     }
 }

@@ -75,7 +75,7 @@ object WebUploader {
                 return bad("bad name")
 
             val upload = Fi(files["file"])
-            if (upload.length() > 80 * 1024) return bad("too big")
+            if (upload.length() > 200 * 1024) return bad("too big")
 
             val dst = mapDir.child(safe)
             val uploaderId = DataManager.getIdByUuid(uuid) ?: -1

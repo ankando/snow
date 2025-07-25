@@ -1046,15 +1046,18 @@ object PluginMenus {
 
 
     private fun reloadWorld(map: mindustry.maps.Map) {
-        if(Vars.state.isMenu){
-            return
-        }
-        if (!map.file.exists()) {
-            return
-        }
-        Vars.maps.setNextMapOverride(map)
-        Events.fire(EventType.GameOverEvent(Team.derelict))
+        if (Vars.state.isMenu || !map.file.exists()) return
+
+        try {
+            val reloader = WorldReloader()
+            reloader.begin()
+            Vars.state.map = map
+            Vars.world.loadMap(map)
+            Vars.logic.play()
+            reloader.end()
+        } catch (_: Exception) {}
     }
+
 
     fun showMapMenu(player: Player, page: Int = 1) {
         val modeItems: List<Pair<Gamemode?, String>> = listOf(
@@ -1114,11 +1117,19 @@ object PluginMenus {
             val mapMode = TagUtil.getMode(map.description())
             val used    = UsedMaps.isUsed(map)
             val color   = if (used) PluginVars.SECONDARY else PluginVars.WHITE
+            val sizeStr = "${map.width}x${map.height}"
 
             val label = buildString {
                 append("$color$icon$index ${map.name()}${PluginVars.RESET}")
-                if (mode == null && mapMode != null) {
-                    append("\n${PluginVars.SECONDARY}${i18nMode(mapMode, player)}${PluginVars.RESET}")
+                append("\n")
+                if (mode == null) {
+                    if (mapMode != null) {
+                        append("${PluginVars.SECONDARY}${i18nMode(mapMode, player)} $sizeStr${PluginVars.RESET}")
+                    } else {
+                        append("${PluginVars.SECONDARY}$sizeStr${PluginVars.RESET}")
+                    }
+                } else {
+                    append("${PluginVars.SECONDARY}$sizeStr${PluginVars.RESET}")
                 }
             }
 
@@ -1138,6 +1149,7 @@ object PluginMenus {
             options = { _, _, _ -> rows }
         )(player, page)
     }
+
 
 
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
@@ -1281,21 +1293,6 @@ object PluginMenus {
             }
         }
 
-        val isNextMap = try {
-            NextMap.get() == map
-        } catch (_: Exception) { false }
-
-        val canEdit  = (isAdmin || uploaderId == DataManager.getIdByUuid(player.uuid())) && !isNextMap
-
-        val btnEdit  = MenuEntry(
-            "${if (canEdit) strong else weak}${I18nManager.get("mapInfo.edit", player)}${PluginVars.RESET}"
-        ) {
-            if (!canEdit) {
-                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
-                return@MenuEntry
-            }
-            showMapEditWizard(player, map)
-        }
         val rows = mutableListOf<MenuEntry>()
 
         if (isAdmin || mapMode != null) {
@@ -1308,72 +1305,12 @@ object PluginMenus {
             rows += btnDelete
         }
 
-        if (canEdit) rows += btnEdit
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
             paged = false,
             desc = { _, _, _ -> desc },
             options = { _, _, _ -> rows }
-        )(player, 1)
-    }
-
-    fun showMapEditWizard(player: Player, map: mindustry.maps.Map) {
-        val uploaderId = DataManager.maps[map.file.name()]?.uploaderId
-        val canEdit = player.admin() || uploaderId == DataManager.getIdByUuid(player.uuid())
-        if (!canEdit) {
-            Call.announce(player.con,
-                "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
-            return
-        }
-
-        val btnName = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapEdit.name", player)}${PluginVars.RESET}") {
-            MenusManage.createTextInput(
-                title       = I18nManager.get("mapEdit.name.title", player),
-                desc        = I18nManager.get("mapEdit.name.desc", player),
-                isNum       = false,
-                placeholder = map.name()
-            ) { _, input ->
-                val txt = input.trim()
-                if (txt.isNotBlank()) {
-                    EditMaps.requestEdit(player, map, newName = txt)
-                }
-            }(player)
-        }
-
-        val btnDesc = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapEdit.desc", player)}${PluginVars.RESET}") {
-            MenusManage.createTextInput(
-                title       = I18nManager.get("mapEdit.desc.title", player),
-                desc        = I18nManager.get("mapEdit.desc.desc", player),
-                isNum       = false,
-                placeholder = map.description() ?: ""
-            ) { _, input ->
-                val txt = input.trim()
-                if (txt.isNotBlank()) {
-                    EditMaps.requestEdit(player, map, newDesc = txt)
-                }
-            }(player)
-        }
-
-        val btnAuthor = MenuEntry("${PluginVars.WHITE}${I18nManager.get("mapEdit.author", player)}${PluginVars.RESET}") {
-            MenusManage.createTextInput(
-                title       = I18nManager.get("mapEdit.author.title", player),
-                desc        = I18nManager.get("mapEdit.author.desc", player),
-                isNum       = false,
-                placeholder = map.author() ?: ""
-            ) { _, input ->
-                val txt = input.trim()
-                if (txt.isNotBlank()) {
-                    EditMaps.requestEdit(player, map, newAuthor = txt)
-                }
-            }(player)
-        }
-
-        MenusManage.createMenu<Unit>(
-            title   = { _, _, _, _ -> "${PluginVars.GRAY}${map.name()}${PluginVars.RESET}" },
-            paged   = false,
-            desc    = { _, _, _ -> "" },
-            options = { _, _, _ -> listOf(btnName, btnDesc, btnAuthor) }
         )(player, 1)
     }
 

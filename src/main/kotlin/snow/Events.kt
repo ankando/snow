@@ -87,6 +87,8 @@ object EventManager {
             val currentMap  = Vars.state.map
             val currentMode = getMode(currentMap.description())
 
+            currentMode?.let { Vars.state.rules = currentMap.applyRules(it) }
+
             val targetMode = currentMode
                 ?: Vars.maps.customMaps().firstNotNullOfOrNull { getMode(it.description()) }
                 ?: return@on
@@ -114,7 +116,6 @@ object EventManager {
                 return@on
             }
 
-
             val startIndex = modeRotation.indexOf(targetMode).let { if (it >= 0) it else 0 }
 
             for (i in modeRotation.indices) {
@@ -132,6 +133,7 @@ object EventManager {
                 }
             }
         }
+
     }
 
     private fun handlePvpGameOver(winner: Team) {
