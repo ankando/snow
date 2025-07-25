@@ -1325,10 +1325,10 @@ object PluginMenus {
         if (isAdmin) {
             rows += btnChange
             rows += btnNext
-            rows += btnDelete
         }
 
         if (isAdmin || uploaderId == DataManager.getIdByUuid(player.uuid())) {
+            rows += btnDelete
             rows += btnSelectMode
         }
 

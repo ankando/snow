@@ -97,7 +97,6 @@ object NetEvents {
         }
     }
 
-
     fun toPastelHex(baseHex: String): String {
         val clean = baseHex.removePrefix("#")
         require(clean.length == 6)
@@ -120,9 +119,8 @@ object NetEvents {
 
         val baseHue        = h
         val baseSaturation = (s * 0.4f).coerceIn(0f, 0.35f)
-        val baseLightness  = (l * 0.6f + 0.35f).coerceIn(0.55f, 0.90f)
+        val baseLightness  = (l * 0.6f + 0.45f).coerceIn(0.60f, 0.95f)
 
-        // HSL → RGB
         fun hslToRgb(hh: Float, ss: Float, ll: Float): Triple<Int, Int, Int> {
             val c = (1 - kotlin.math.abs(2 * ll - 1)) * ss
             val x = c * (1 - kotlin.math.abs(((hh * 6) % 2) - 1))
@@ -142,6 +140,7 @@ object NetEvents {
         val (rFin, gFin, bFin) = hslToRgb(baseHue, baseSaturation, baseLightness)
         return String.format("#%02X%02X%02X", rFin, gFin, bFin)
     }
+
 
     private fun buildChatPrefix(player: Player): String {
         val useTeamColor = Vars.state.rules.pvp &&
