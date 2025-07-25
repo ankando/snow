@@ -88,6 +88,7 @@ object EventManager {
             val currentMode = getMode(currentMap.description())
 
             currentMode?.let { Vars.state.rules = currentMap.applyRules(it) }
+            Vars.state.rules.pvpAutoPause = false
 
             val targetMode = currentMode
                 ?: Vars.maps.customMaps().firstNotNullOfOrNull { getMode(it.description()) }
@@ -106,7 +107,7 @@ object EventManager {
                 .mapKeys { it.key!! }
 
             if (allMapsByMode.isEmpty()) {
-                val fallback = if (Vars.maps.customMaps().isEmpty)
+                val fallback = if (Vars.maps.customMaps().isEmpty())
                     Vars.maps.all().random()
                 else
                     Vars.maps.customMaps().random()
@@ -116,23 +117,36 @@ object EventManager {
                 return@on
             }
 
-            val startIndex = modeRotation.indexOf(targetMode).let { if (it >= 0) it else 0 }
+            val startIdx = modeRotation.indexOf(targetMode).takeIf { it >= 0 } ?: 0
+            val modesInOrder = List(modeRotation.size) { offset ->
+                modeRotation[(startIdx + offset) % modeRotation.size]
+            }
 
-            for (i in modeRotation.indices) {
-                val mode = modeRotation[(startIndex + i) % modeRotation.size]
+            var selected: mindustry.maps.Map? = null
+            for (mode in modesInOrder) {
                 val mapsForMode = allMapsByMode[mode] ?: continue
-
                 val unused = mapsForMode.filterNot { UsedMaps.isUsed(it) }
                 if (unused.isNotEmpty()) {
-                    val selected = unused.random()
-                    Vars.maps.setNextMapOverride(selected)
-                    NextMap.set(selected)
+                    selected = unused.random()
                     break
-                } else {
-                    UsedMaps.clear()
                 }
             }
+
+            if (selected == null) {
+                UsedMaps.clear()
+                for (mode in modesInOrder) {
+                    val mapsForMode = allMapsByMode[mode] ?: continue
+                    selected = mapsForMode.random()
+                    break
+                }
+            }
+
+            selected?.let {
+                Vars.maps.setNextMapOverride(it)
+                NextMap.set(it)
+            }
         }
+
 
     }
 
