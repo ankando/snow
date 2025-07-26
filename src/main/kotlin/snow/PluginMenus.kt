@@ -56,7 +56,7 @@ object PluginMenus {
 
 
 
-    private enum class Stone(val glyph: String){ EMPTY("\uF773"), BLACK("\uF6F3"), WHITE("\uF8A8") }
+    private enum class Stone(val glyph: String){ EMPTY("\uF8F7"), BLACK("\uF6F3"), WHITE("\uF7C9") }
     private data class Cursor(var x:Int=10,var y:Int=10)
     private data class Invite(val from:String,val time:Long=System.currentTimeMillis())
     private data class GomokuState(
@@ -122,7 +122,11 @@ object PluginMenus {
 
     private val gomokuMenuId:Int=Menus.registerMenu{ p, choice->
         val me = p ?: return@registerMenu
-        val stateKey = games.keys.find { it.first == me.uuid() || it.second == me.uuid() } ?: return@registerMenu
+        val stateKey = games.keys.find { it.first == me.uuid() || it.second == me.uuid() } ?: run {
+            Call.hideFollowUpMenu(me.con, gomokuMenuId)
+            return@registerMenu
+        }
+
         val state = games[stateKey]!!
 
         if (state.winner != null) {
@@ -147,8 +151,16 @@ object PluginMenus {
             9 -> if (myTurn) {
                 if(state.place(cur.x, cur.y, myStone, me.uuid())) state.turnBlack = !state.turnBlack
             }
-            10 -> { games.remove(stateKey); Call.hideFollowUpMenu(me.con, gomokuMenuId); return@registerMenu }
-            11 -> { Call.hideFollowUpMenu(me.con, gomokuMenuId); return@registerMenu }
+            10 -> {
+                showConfirmMenu(me) {
+                    games.remove(stateKey); Call.hideFollowUpMenu(me.con, gomokuMenuId); return@showConfirmMenu
+                }
+            }
+            11 -> {
+                showConfirmMenu(me) {
+                    Call.hideFollowUpMenu(me.con, gomokuMenuId); return@showConfirmMenu
+                }
+            }
         }
 
         val oppUuid = if (me.uuid() == stateKey.first) stateKey.second else stateKey.first
@@ -171,7 +183,10 @@ object PluginMenus {
             Groups.player.find{ it.uuid()==inv.from }?.let{ sender->
                 rows+=MenuEntry("$INV_PREFIX${PluginVars.SECONDARY} ${sender.name()}${PluginVars.RESET}"){
                     if(games.keys.any{ it.first==uid||it.second==uid }) return@MenuEntry
-                    startGame(sender.uuid(),uid)
+                    showConfirmMenu(player) {
+                        startGame(sender.uuid(), uid)
+                        invites[uid]?.clear()
+                    }
                 }
             }
         }
@@ -257,8 +272,6 @@ object PluginMenus {
         )
     }
 
-
-
     private enum class Hint { LOW, HIGH, NONE }
 
     private data class GuessState(
@@ -283,53 +296,38 @@ object PluginMenus {
             append("\n\n${I18nManager.get("guess.attempts", player)}: ${state.attempts}")
         }
 
-        val rows = (1..10).map { i ->
-            val rangeLabel = "${(i - 1) * 10 + 1}-${i * 10}"
-            MenuEntry("${PluginVars.WHITE}$rangeLabel${PluginVars.RESET}") {
-                showNumberInputMenu(player, i)
-            }
-        }
+        MenusManage.createTextInput(
+            title = I18nManager.get("guess.title", player),
+            desc = desc,
+            placeholder = "1",
+            isNum = true,
+            maxChars = 3
+        ) { _, input ->
+            val number = input.toIntOrNull()
 
-        MenusManage.createMenu<Unit>(
-            title   = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("guess.title", player)}${PluginVars.RESET}" },
-            desc    = { _, _, _ -> desc },
-            paged   = false,
-            options = { _, _, _ -> rows }
-        )(player, 1)
-    }
-
-    private fun showNumberInputMenu(player: Player, group: Int) {
-        val base = (group - 1) * 10 + 1
-        val rows = (base until base + 10).map { n ->
-            MenuEntry("${PluginVars.WHITE}$n${PluginVars.RESET}") { handleGuess(player, n) }
-        }
-
-        MenusManage.createMenu<Unit>(
-            title   = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("guess.choose", player)}${PluginVars.RESET}" },
-            desc    = { _, _, _ -> "" },
-            paged   = false,
-            options = { _, _, _ -> rows }
-        )(player, 1)
-    }
-
-    private fun handleGuess(player: Player, guess: Int) {
-        val uuid  = player.uuid()
-        val state = guessStates[uuid] ?: return
-        state.attempts++
-
-        state.hint = when {
-            guess < state.answer -> Hint.LOW
-            guess > state.answer -> Hint.HIGH
-            else -> {
-                Call.announce(
-                    player.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("guess.win", player)} ${state.attempts}${PluginVars.RESET}"
-                )
+            if (number == null || number !in 1..100) {
                 guessStates.remove(uuid)
-                return
+                return@createTextInput
             }
-        }
-        showGuessGameMenu(player)
+
+            val stateNow = guessStates[uuid] ?: return@createTextInput
+            stateNow.attempts++
+
+            stateNow.hint = when {
+                number < stateNow.answer -> Hint.LOW
+                number > stateNow.answer -> Hint.HIGH
+                else -> {
+                    Call.announce(
+                        player.con,
+                        "${PluginVars.SUCCESS}${I18nManager.get("guess.win", player)} ${stateNow.attempts}${PluginVars.RESET}"
+                    )
+                    guessStates.remove(uuid)
+                    return@createTextInput
+                }
+            }
+
+            showGuessGameMenu(player)
+        }(player)
     }
 
     private data class LightsOutGameStateData(
@@ -408,7 +406,7 @@ object PluginMenus {
         Call.followUpMenu(
             player.con,
             lightsOutMenuId,
-            "${PluginVars.WHITE}Lights Out${PluginVars.RESET}",
+            "${PluginVars.WHITE}${I18nManager.get("game.lightsout", player)}${PluginVars.RESET}",
             description,
             buttonRows
         )
