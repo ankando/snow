@@ -28,185 +28,12 @@ import kotlin.math.max
 import kotlin.math.pow
 
 object PluginMenus {
-
-
-    private val snapshotFolder: arc.files.Fi = Vars.saveDirectory.child("snapshots")
-
-    fun showSnapshotMenu(player: Player, page: Int = 1) {
-        snapshotFolder.mkdirs()
-
-        val rows = mutableListOf<MenuEntry>()
-
-        rows += MenuEntry("${PluginVars.WHITE}${I18nManager.get("snapshot.add", player)}${PluginVars.RESET}") {
-            val ts = System.currentTimeMillis()
-            val file = snapshotFolder.child("$ts.msav")
-            if (!isCoreAdmin(player.uuid())) {
-                if (VoteManager.globalVoteSession != null) {
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
-                    return@MenuEntry
-                }
-
-                showConfirmMenu(player) {
-                    VoteManager.createGlobalVote(creator = player) { ok ->
-                        if (ok && Vars.state.isGame) {
-                            SaveIO.save(file)
-                            Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.saved", player)}${PluginVars.RESET}")
-                        }
-                    }
-                    Groups.player.forEach { p ->
-                        if (p != player && !isBanned(p.uuid())) {
-                            val t = "${PluginVars.INFO}${I18nManager.get("snapshot.vote.title", p)}${PluginVars.RESET}"
-                            val d = "${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.vote.desc", p)}${PluginVars.RESET}"
-                            createConfirmMenu(
-                                title = { t },
-                                desc = { d },
-                                onResult = { pl, choice -> if (choice == 0) VoteManager.addVote(pl.uuid()) }
-                            )(p)
-                        }
-                    }
-                }
-            } else {
-                SaveIO.save(file)
-                Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.saved", player)}${PluginVars.RESET}")
-                showSnapshotMenu(player)
-            }
-        }
-
-        val mapEntries = snapshotFolder.list().filter { it.extension() == "msav" }
-            .mapNotNull { file ->
-                val ts = file.nameWithoutExtension().toLongOrNull() ?: return@mapNotNull null
-                val mapName = runCatching { SaveIO.getMeta(file).map.name() }.getOrElse { "Unknown" }
-                Triple(mapName, ts, file)
-            }
-            .groupBy { it.first }
-            .mapValues { (_, list) -> list.sortedByDescending { it.second } }
-            .toList()
-            .sortedByDescending { it.second.firstOrNull()?.second ?: 0L }
-
-        mapEntries.forEach { (mapName, group) ->
-            group.forEachIndexed { i, (_, _, file) ->
-                val label = "${PluginVars.WHITE}$mapName#${i + 1}${PluginVars.RESET}"
-                rows += MenuEntry(label) { p -> showSnapshotOptionsMenu(p, file, mapName, i + 1) }
-            }
-        }
-
-        MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("snapshot.title", player)}${PluginVars.RESET}" },
-            desc = { _, _, _ -> "" },
-            paged = true,
-            options = { _, _, _ -> rows }
-        )(player, page)
-    }
-
-    fun showSnapshotOptionsMenu(player: Player, file: arc.files.Fi, mapName: String, index: Int) {
-        val isAdmin = isCoreAdmin(player.uuid())
-        val normalCount = Groups.player.count { isNormal(it.uuid()) }
-        val strong = PluginVars.INFO
-        val weak = PluginVars.SECONDARY
-
-        val title = "${PluginVars.GRAY}$mapName#$index${PluginVars.RESET}"
-        val desc = ""
-
-        val btnVote = MenuEntry("${PluginVars.WHITE}${I18nManager.get("snapshot.vote", player)}${PluginVars.RESET}") {
-            if (normalCount <= 1) {
-                loadSnapshot(file)
-                Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}")
-            } else {
-                if ((DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0) < 100) {
-                    Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("noPoints", player)}${PluginVars.RESET}")
-                    return@MenuEntry
-                }
-                if (VoteManager.globalVoteSession != null) {
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
-                    return@MenuEntry
-                }
-
-                showConfirmMenu(player) {
-                    VoteManager.createGlobalVote(creator = player) { ok ->
-                        if (ok && Vars.state.isGame) loadSnapshot(file)
-                    }
-                    Groups.player.each { p ->
-                        if (p != player && !isBanned(p.uuid())) {
-                            val t = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
-                            val d = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.vote.desc", p)} $mapName#$index${PluginVars.RESET}"
-                            val menu = createConfirmMenu(
-                                title = { t },
-                                desc = { d },
-                                onResult = { pl, choice ->
-                                    if (choice == 0) VoteManager.addVote(pl.uuid())
-                                }
-                            )
-                            menu(p)
-                        }
-                    }
-                }
-            }
-        }
-
-        val btnChange = MenuEntry("${if (isAdmin) strong else weak}${I18nManager.get("snapshot.change", player)}${PluginVars.RESET}") {
-            if (!isAdmin) {
-                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
-                return@MenuEntry
-            }
-            showConfirmMenu(player) {
-                loadSnapshot(file)
-            }
-        }
-
-        val btnDelete = MenuEntry("${if (isAdmin) strong else weak}${I18nManager.get("snapshot.delete", player)}${PluginVars.RESET}") {
-            if (!isAdmin) {
-                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
-                return@MenuEntry
-            }
-            showConfirmMenu(player) {
-                if (file.exists() && file.delete()) {
-                    Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.deleted", player)}${PluginVars.RESET}")
-                } else {
-                    Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("snapshot.delete_failed", player)}${PluginVars.RESET}")
-                }
-                showSnapshotMenu(player)
-            }
-        }
-
-        val rows = mutableListOf(btnVote)
-        if (isAdmin) {
-            rows += btnChange
-            rows += btnDelete
-        }
-
-        MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ -> title },
-            desc = { _, _, _ -> desc },
-            paged = false,
-            options = { _, _, _ -> rows }
-        )(player, 1)
-    }
-
-    private fun loadSnapshot(file: arc.files.Fi) {
-        if (!file.exists()) return
-        try {
-            if (Vars.state.isGame) {
-                Groups.player.each { it.kick(Packets.KickReason.serverRestarting) }
-                Vars.state.set(mindustry.core.GameState.State.menu)
-                Vars.net.closeServer()
-            }
-            RevertBuild.clearAll()
-            VoteManager.clearVote()
-            val reloader = WorldReloader()
-            reloader.begin()
-            SaveIO.load(file)
-            Vars.state.set(mindustry.core.GameState.State.playing)
-            Vars.netServer.openServer()
-            reloader.end()
-        } catch (_: Exception) { }
-    }
-
-
-
     fun showGamesMenu(player: Player, page: Int = 1) {
         val games = listOf(
-            "2048" to ::show2048game,
-            "Lights Out" to ::showLightsOutGame
+            "2048"                                                    to ::show2048game,
+            I18nManager.get("game.lightsout",     player)            to ::showLightsOutGame,
+            I18nManager.get("game.guessthenumber", player)           to ::showGuessGameMenu,
+            I18nManager.get("game.gomoku",         player)           to ::showGomokuEntry
         )
 
         val menu = MenusManage.createMenu<Unit>(
@@ -225,6 +52,284 @@ object PluginMenus {
         )
 
         menu(player, page)
+    }
+
+
+
+    private enum class Stone(val glyph: String){ EMPTY("\uF773"), BLACK("\uF6F3"), WHITE("\uF8A8") }
+    private data class Cursor(var x:Int=10,var y:Int=10)
+    private data class Invite(val from:String,val time:Long=System.currentTimeMillis())
+    private data class GomokuState(
+        val white:String,val black:String,
+        val board:Array<Array<Stone>> = Array(21){ Array(21){ Stone.EMPTY } },
+        var turnBlack:Boolean = true,
+        var winner:Stone? = null,
+        val cursors:MutableMap<String,Cursor> = mutableMapOf()
+    ){
+        fun place(x: Int, y: Int, s: Stone, self: String): Boolean {
+            if (board[y][x] != Stone.EMPTY || winner != null) return false
+            board[y][x] = s
+            if (checkFive(x, y, s)) {
+                winner = s
+                val gameKey = key(self, if (self == white) black else white)
+                games.remove(gameKey)
+            }
+            return true
+        }
+
+        private fun checkFive(x:Int,y:Int,s:Stone):Boolean{
+            fun count(dx:Int,dy:Int):Int{
+                var c=0; var nx=x+dx; var ny=y+dy
+                while(nx in 0 until 21 && ny in 0 until 21 && board[ny][nx]==s){ c++; nx+=dx; ny+=dy }
+                return c
+            }
+            val dirs = arrayOf(1 to 0,0 to 1,1 to 1,1 to -1)
+            return dirs.any{ (dx,dy)-> 1+count(dx,dy)+count(-dx,-dy)>=5 }
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as GomokuState
+
+            if (turnBlack != other.turnBlack) return false
+            if (white != other.white) return false
+            if (black != other.black) return false
+            if (!board.contentDeepEquals(other.board)) return false
+            if (winner != other.winner) return false
+            if (cursors != other.cursors) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = turnBlack.hashCode()
+            result = 31 * result + white.hashCode()
+            result = 31 * result + black.hashCode()
+            result = 31 * result + board.contentDeepHashCode()
+            result = 31 * result + (winner?.hashCode() ?: 0)
+            result = 31 * result + cursors.hashCode()
+            return result
+        }
+    }
+
+    private fun key(u1:String,u2:String)=if(u1<u2) u1 to u2 else u2 to u1
+    private const val BOARD=21
+    private val invites=mutableMapOf<String,MutableList<Invite>>()
+    private val games  =mutableMapOf<Pair<String,String>,GomokuState>()
+    private const val INV_PREFIX="${PluginVars.SECONDARY}\uE861${PluginVars.RESET}"
+
+    private val gomokuMenuId:Int=Menus.registerMenu{ p, choice->
+        val me = p ?: return@registerMenu
+        val stateKey = games.keys.find { it.first == me.uuid() || it.second == me.uuid() } ?: return@registerMenu
+        val state = games[stateKey]!!
+
+        if (state.winner != null) {
+            Call.hideFollowUpMenu(me.con, gomokuMenuId)
+            return@registerMenu
+        }
+
+        val cur = state.cursors.getOrPut(me.uuid()) { Cursor() }
+        val meBlack = me.uuid() == state.black
+        val myStone = if (meBlack) Stone.BLACK else Stone.WHITE
+        val myTurn = (state.turnBlack && meBlack) || (!state.turnBlack && !meBlack)
+
+        when (choice) {
+            1,3,5,7 -> if (myTurn) {
+                when (choice) {
+                    1 -> cur.y = (cur.y - 1 + BOARD) % BOARD
+                    3 -> cur.x = (cur.x - 1 + BOARD) % BOARD
+                    5 -> cur.x = (cur.x + 1) % BOARD
+                    7 -> cur.y = (cur.y + 1) % BOARD
+                }
+            }
+            9 -> if (myTurn) {
+                if(state.place(cur.x, cur.y, myStone, me.uuid())) state.turnBlack = !state.turnBlack
+            }
+            10 -> { games.remove(stateKey); Call.hideFollowUpMenu(me.con, gomokuMenuId); return@registerMenu }
+            11 -> { Call.hideFollowUpMenu(me.con, gomokuMenuId); return@registerMenu }
+        }
+
+        val oppUuid = if (me.uuid() == stateKey.first) stateKey.second else stateKey.first
+        showGomokuBoard(me, state)
+        Groups.player.find { it.uuid() == oppUuid }?.let { showGomokuBoard(it, state) }
+    }
+
+    fun showGomokuEntry(player:Player){
+        val uid=player.uuid()
+        games.keys.find{ it.first==uid||it.second==uid }?.let{
+            showGomokuBoard(player,games[it]!!); return
+        }
+        val now=System.currentTimeMillis()
+        invites.values.forEach{ it.removeIf{ inv-> now-inv.time>300_000 } }
+
+        val alreadySent=invites.values.any{ lst->lst.any{ it.from==uid } }
+        val rows=mutableListOf<MenuEntry>()
+
+        invites[uid].orEmpty().forEach{ inv->
+            Groups.player.find{ it.uuid()==inv.from }?.let{ sender->
+                rows+=MenuEntry("$INV_PREFIX${PluginVars.SECONDARY} ${sender.name()}${PluginVars.RESET}"){
+                    if(games.keys.any{ it.first==uid||it.second==uid }) return@MenuEntry
+                    startGame(sender.uuid(),uid)
+                }
+            }
+        }
+
+        Groups.player.filter{ it.uuid()!=uid }.forEach{ p->
+            rows+=MenuEntry("${PluginVars.WHITE}${p.name()}${PluginVars.RESET}"){
+                if(alreadySent){
+                    Call.announce(player.con,"${PluginVars.WARN}${I18nManager.get("gomoku.inv.already",player)}${PluginVars.RESET}")
+                }else{
+                    showConfirmMenu(player){
+                        if(games.keys.any{ it.first==uid||it.second==uid }) return@showConfirmMenu
+                        val lst=invites.getOrPut(p.uuid()){ mutableListOf() }
+                        if(lst.none{ it.from==uid }) lst+=Invite(uid)
+                        Call.announce(player.con,"${PluginVars.INFO}${I18nManager.get("gomoku.inv.sent",player)}${PluginVars.RESET}")
+                    }
+                }
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title={_,_,_,_->"${PluginVars.GRAY}${I18nManager.get("gomoku.list",player)}${PluginVars.RESET}"},
+            desc={_,_,_->""},
+            paged=true,
+            options={_,_,_->rows}
+        )(player,1)
+    }
+
+    private fun startGame(u1:String,u2:String){
+        val k=key(u1,u2)
+        games[k]=GomokuState(white=k.first,black=k.second)
+        invites.remove(u1); invites.remove(u2)
+        invites.values.forEach{ it.removeIf{ inv-> inv.from==u1||inv.from==u2 } }
+        val s=games[k]!!
+        Groups.player.find{ it.uuid()==k.first }?.let{ showGomokuBoard(it,s) }
+        Groups.player.find{ it.uuid()==k.second }?.let{ showGomokuBoard(it,s) }
+    }
+
+    private fun showGomokuBoard(p:Player,state:GomokuState){
+        val cur=state.cursors.getOrPut(p.uuid()){ Cursor() }
+        val meBlack=p.uuid()==state.black
+        val myStone=if(meBlack) Stone.BLACK else Stone.WHITE
+        val myTurn =(state.turnBlack&&meBlack)||(!state.turnBlack&&!meBlack) && state.winner==null
+
+        val boardTxt=buildString{
+            repeat(BOARD){ y->
+                repeat(BOARD){ x->
+                    append(
+                        when{
+                            state.board[y][x]!=Stone.EMPTY -> state.board[y][x].glyph
+                            x==cur.x&&y==cur.y            -> ""
+                            else                          -> Stone.EMPTY.glyph
+                        }
+                    )
+                }
+                append('\n')
+            }
+        }
+
+        fun b(t:String,e:Boolean)=if(e) "${PluginVars.WHITE}$t${PluginVars.RESET}"
+        else   "${PluginVars.SECONDARY}$t${PluginVars.RESET}"
+
+        val buttons=arrayOf(
+            arrayOf("", b("\uE804",myTurn), ""),
+            arrayOf(b("\uE802",myTurn),"",b("\uE803",myTurn)),
+            arrayOf("", b("\uE805",myTurn), ""),
+            arrayOf(b(I18nManager.get("gomoku.select",p),myTurn)),
+            arrayOf(b(I18nManager.get("gomoku.end",p),true)),
+            arrayOf(b(I18nManager.get("gomoku.exit",p),true))
+        )
+
+        val info = when{
+            state.winner==myStone -> I18nManager.get("gomoku.win",p)
+            state.winner!=null    -> I18nManager.get("gomoku.lose",p)
+            myTurn                -> I18nManager.get("gomoku.yourturn",p)
+            else                  -> I18nManager.get("gomoku.wait",p)
+        }
+
+        Call.followUpMenu(
+            p.con,gomokuMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("gomoku.title",p)}${PluginVars.RESET}",
+            "\n${PluginVars.INFO}$info${PluginVars.RESET}\n\n$boardTxt",
+            buttons
+        )
+    }
+
+
+
+    private enum class Hint { LOW, HIGH, NONE }
+
+    private data class GuessState(
+        val answer: Int = Mathf.random(1, 100),
+        var attempts: Int = 0,
+        var hint: Hint = Hint.NONE
+    )
+
+    private val guessStates = mutableMapOf<String, GuessState>()
+
+    fun showGuessGameMenu(player: Player) {
+        val uuid  = player.uuid()
+        val state = guessStates.getOrPut(uuid) { GuessState() }
+
+        val desc = buildString {
+            append(I18nManager.get("guess.desc", player))
+            when (state.hint) {
+                Hint.LOW  -> append("\n\n${I18nManager.get("guess.low",  player)}")
+                Hint.HIGH -> append("\n\n${I18nManager.get("guess.high", player)}")
+                Hint.NONE -> {}
+            }
+            append("\n\n${I18nManager.get("guess.attempts", player)}: ${state.attempts}")
+        }
+
+        val rows = (1..10).map { i ->
+            val rangeLabel = "${(i - 1) * 10 + 1}-${i * 10}"
+            MenuEntry("${PluginVars.WHITE}$rangeLabel${PluginVars.RESET}") {
+                showNumberInputMenu(player, i)
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title   = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("guess.title", player)}${PluginVars.RESET}" },
+            desc    = { _, _, _ -> desc },
+            paged   = false,
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+    private fun showNumberInputMenu(player: Player, group: Int) {
+        val base = (group - 1) * 10 + 1
+        val rows = (base until base + 10).map { n ->
+            MenuEntry("${PluginVars.WHITE}$n${PluginVars.RESET}") { handleGuess(player, n) }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title   = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("guess.choose", player)}${PluginVars.RESET}" },
+            desc    = { _, _, _ -> "" },
+            paged   = false,
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+    private fun handleGuess(player: Player, guess: Int) {
+        val uuid  = player.uuid()
+        val state = guessStates[uuid] ?: return
+        state.attempts++
+
+        state.hint = when {
+            guess < state.answer -> Hint.LOW
+            guess > state.answer -> Hint.HIGH
+            else -> {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.SUCCESS}${I18nManager.get("guess.win", player)} ${state.attempts}${PluginVars.RESET}"
+                )
+                guessStates.remove(uuid)
+                return
+            }
+        }
+        showGuessGameMenu(player)
     }
 
     private data class LightsOutGameStateData(
@@ -562,6 +667,178 @@ object PluginMenus {
         if (moved) addRandomTile(grid)
         show2048game(player)
     }
+
+    private val snapshotFolder: arc.files.Fi = Vars.saveDirectory.child("snapshots")
+
+    fun showSnapshotMenu(player: Player, page: Int = 1) {
+        snapshotFolder.mkdirs()
+
+        val rows = mutableListOf<MenuEntry>()
+
+        rows += MenuEntry("${PluginVars.WHITE}${I18nManager.get("snapshot.add", player)}${PluginVars.RESET}") {
+            val ts = System.currentTimeMillis()
+            val file = snapshotFolder.child("$ts.msav")
+            if (!isCoreAdmin(player.uuid())) {
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                    return@MenuEntry
+                }
+
+                showConfirmMenu(player) {
+                    VoteManager.createGlobalVote(creator = player) { ok ->
+                        if (ok && Vars.state.isGame) {
+                            SaveIO.save(file)
+                            Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.saved", player)}${PluginVars.RESET}")
+                        }
+                    }
+                    Groups.player.forEach { p ->
+                        if (p != player && !isBanned(p.uuid())) {
+                            val t = "${PluginVars.INFO}${I18nManager.get("snapshot.vote.title", p)}${PluginVars.RESET}"
+                            val d = "${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.vote.desc", p)}${PluginVars.RESET}"
+                            createConfirmMenu(
+                                title = { t },
+                                desc = { d },
+                                onResult = { pl, choice -> if (choice == 0) VoteManager.addVote(pl.uuid()) }
+                            )(p)
+                        }
+                    }
+                }
+            } else {
+                SaveIO.save(file)
+                Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.saved", player)}${PluginVars.RESET}")
+                showSnapshotMenu(player)
+            }
+        }
+
+        val mapEntries = snapshotFolder.list().filter { it.extension() == "msav" }
+            .mapNotNull { file ->
+                val ts = file.nameWithoutExtension().toLongOrNull() ?: return@mapNotNull null
+                val mapName = runCatching { SaveIO.getMeta(file).map.name() }.getOrElse { "Unknown" }
+                Triple(mapName, ts, file)
+            }
+            .groupBy { it.first }
+            .mapValues { (_, list) -> list.sortedByDescending { it.second } }
+            .toList()
+            .sortedByDescending { it.second.firstOrNull()?.second ?: 0L }
+
+        mapEntries.forEach { (mapName, group) ->
+            group.forEachIndexed { i, (_, _, file) ->
+                val label = "${PluginVars.WHITE}$mapName#${i + 1}${PluginVars.RESET}"
+                rows += MenuEntry(label) { p -> showSnapshotOptionsMenu(p, file, mapName, i + 1) }
+            }
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("snapshot.title", player)}${PluginVars.RESET}" },
+            desc = { _, _, _ -> "" },
+            paged = true,
+            options = { _, _, _ -> rows }
+        )(player, page)
+    }
+
+    fun showSnapshotOptionsMenu(player: Player, file: arc.files.Fi, mapName: String, index: Int) {
+        val isAdmin = isCoreAdmin(player.uuid())
+        val normalCount = Groups.player.count { isNormal(it.uuid()) }
+        val strong = PluginVars.INFO
+        val weak = PluginVars.SECONDARY
+
+        val title = "${PluginVars.GRAY}$mapName#$index${PluginVars.RESET}"
+        val desc = ""
+
+        val btnVote = MenuEntry("${PluginVars.WHITE}${I18nManager.get("snapshot.vote", player)}${PluginVars.RESET}") {
+            if (normalCount <= 1) {
+                loadSnapshot(file)
+                Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}")
+            } else {
+                if ((DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0) < 100) {
+                    Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("noPoints", player)}${PluginVars.RESET}")
+                    return@MenuEntry
+                }
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                    return@MenuEntry
+                }
+
+                showConfirmMenu(player) {
+                    VoteManager.createGlobalVote(creator = player) { ok ->
+                        if (ok && Vars.state.isGame) loadSnapshot(file)
+                    }
+                    Groups.player.each { p ->
+                        if (p != player && !isBanned(p.uuid())) {
+                            val t = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
+                            val d = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.vote.desc", p)} $mapName#$index${PluginVars.RESET}"
+                            val menu = createConfirmMenu(
+                                title = { t },
+                                desc = { d },
+                                onResult = { pl, choice ->
+                                    if (choice == 0) VoteManager.addVote(pl.uuid())
+                                }
+                            )
+                            menu(p)
+                        }
+                    }
+                }
+            }
+        }
+
+        val btnChange = MenuEntry("${if (isAdmin) strong else weak}${I18nManager.get("snapshot.change", player)}${PluginVars.RESET}") {
+            if (!isAdmin) {
+                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+                return@MenuEntry
+            }
+            showConfirmMenu(player) {
+                loadSnapshot(file)
+            }
+        }
+
+        val btnDelete = MenuEntry("${if (isAdmin) strong else weak}${I18nManager.get("snapshot.delete", player)}${PluginVars.RESET}") {
+            if (!isAdmin) {
+                Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("no.permission", player)}${PluginVars.RESET}")
+                return@MenuEntry
+            }
+            showConfirmMenu(player) {
+                if (file.exists() && file.delete()) {
+                    Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("snapshot.deleted", player)}${PluginVars.RESET}")
+                } else {
+                    Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("snapshot.delete_failed", player)}${PluginVars.RESET}")
+                }
+                showSnapshotMenu(player)
+            }
+        }
+
+        val rows = mutableListOf(btnVote)
+        if (isAdmin) {
+            rows += btnChange
+            rows += btnDelete
+        }
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> title },
+            desc = { _, _, _ -> desc },
+            paged = false,
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+    private fun loadSnapshot(file: arc.files.Fi) {
+        if (!file.exists()) return
+        try {
+            if (Vars.state.isGame) {
+                Groups.player.each { it.kick(Packets.KickReason.serverRestarting) }
+                Vars.state.set(mindustry.core.GameState.State.menu)
+                Vars.net.closeServer()
+            }
+            RevertBuild.clearAll()
+            VoteManager.clearVote()
+            val reloader = WorldReloader()
+            reloader.begin()
+            SaveIO.load(file)
+            Vars.state.set(mindustry.core.GameState.State.playing)
+            Vars.netServer.openServer()
+            reloader.end()
+        } catch (_: Exception) { }
+    }
+
 
     private val editableBooleanRules = listOf(
         "fire",
