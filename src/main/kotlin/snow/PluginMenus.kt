@@ -301,7 +301,7 @@ object PluginMenus {
         MenusManage.createTextInput(
             title = I18nManager.get("guess.title", player),
             desc = desc,
-            placeholder = "1",
+            placeholder = "",
             isNum = true,
             maxChars = 3
         ) { _, input ->
