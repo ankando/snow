@@ -1117,8 +1117,12 @@ object PluginMenus {
                 isNext    -> "\uE809"
                 else      -> "\uF029"
             }
+            val fileName = map.file.name()
+            val mapMode = DataManager.maps[fileName]?.modeName
+                ?.lowercase()
+                ?.let { mode -> Gamemode.entries.find { it.name.equals(mode, ignoreCase = true) } }
+                ?: TagUtil.getMode(map.description())
 
-            val mapMode = TagUtil.getMode(map.description())
             val used    = UsedMaps.isUsed(map)
             val color   = if (used) PluginVars.SECONDARY else PluginVars.WHITE
             val sizeStr = "${map.width}x${map.height}"

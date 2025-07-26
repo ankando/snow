@@ -119,7 +119,7 @@ object NetEvents {
 
         val baseHue        = h
         val baseSaturation = (s * 0.4f).coerceIn(0f, 0.35f)
-        val baseLightness  = (l * 0.6f + 0.45f).coerceIn(0.60f, 0.95f)
+        val baseLightness  = (l * 0.6f + 0.35f).coerceIn(0.60f, 0.85f)
 
         fun hslToRgb(hh: Float, ss: Float, ll: Float): Triple<Int, Int, Int> {
             val c = (1 - kotlin.math.abs(2 * ll - 1)) * ss
