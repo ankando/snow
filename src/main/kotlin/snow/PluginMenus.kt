@@ -184,7 +184,9 @@ object PluginMenus {
                 rows+=MenuEntry("$INV_PREFIX${PluginVars.SECONDARY} ${sender.name()}${PluginVars.RESET}"){
                     if(games.keys.any{ it.first==uid||it.second==uid }) return@MenuEntry
                     showConfirmMenu(player) {
-                        startGame(sender.uuid(), uid)
+                        if (invites.isNotEmpty()) {
+                            startGame(sender.uuid(), uid)
+                        }
                         invites[uid]?.clear()
                     }
                 }
