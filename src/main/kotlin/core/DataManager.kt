@@ -39,7 +39,7 @@ data class MapData(
 
 data class ConfigJson(
     val webUrl: String = "127.0.0.1",
-    val webPort: Int = 8080
+    val webPort: Int = 52011
 )
 
 object DataManager {
@@ -47,7 +47,7 @@ object DataManager {
     val maps = ObjectMap<String, MapData>()
 
     var webUrl: String = "127.0.0.1"
-    var webPort: Int = 8080
+    var webPort: Int = 52011
 
     private var nextId = 1
     @Volatile
