@@ -51,14 +51,11 @@ object NetEvents {
 
         val rawLangGroups = groupPlayersByLang(sender)
 
-        val normLangGroups = rawLangGroups.entries
-            .groupBy({ (lang, _) -> normalizeLang(lang) }) { it.value }
-            .mapValues { (_, lists) -> lists.flatten() }
-
-        normLangGroups.forEach { (lang, players) ->
+        rawLangGroups.forEach { (lang, players) ->
             sendTranslatedBroadcast(plain, prefix, lang, players, fallback = localMsg)
         }
     }
+
 
     private fun sendTranslatedBroadcast(
         text: String,
@@ -84,18 +81,6 @@ object NetEvents {
         )
     }
 
-    private fun normalizeLang(raw: String?): String {
-        if (raw.isNullOrBlank()) return "auto"
-        val u = raw.trim().lowercase()
-        return when {
-            u.startsWith("zh") -> "zh"
-            u.startsWith("en") -> "en"
-            u.startsWith("ru") -> "ru"
-            u.startsWith("ja") -> "ja"
-            u.startsWith("ko") -> "ko"
-            else -> u.substringBefore('_').substringBefore('-')
-        }
-    }
 
     fun toPastelHex(baseHex: String): String {
         val clean = baseHex.removePrefix("#")

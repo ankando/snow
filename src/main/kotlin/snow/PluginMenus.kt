@@ -56,16 +56,16 @@ object PluginMenus {
 
 
 
-    private enum class Stone(val glyph: String){ EMPTY("\uF8F7"), BLACK("\uF6F3"), WHITE("\uF7C9") }
-    private data class Cursor(var x:Int=10,var y:Int=10)
-    private data class Invite(val from:String,val time:Long=System.currentTimeMillis())
+    private enum class Stone(val glyph: String){ EMPTY("\uF8F7"), BLACK("\uF7C9"), WHITE("\uF8A6") }
+    private data class Cursor(var x: Int = 10, var y: Int = 10)
+    private data class Invite(val from: String, val time: Long = System.currentTimeMillis())
     private data class GomokuState(
-        val white:String,val black:String,
-        val board:Array<Array<Stone>> = Array(21){ Array(21){ Stone.EMPTY } },
-        var turnBlack:Boolean = true,
-        var winner:Stone? = null,
-        val cursors:MutableMap<String,Cursor> = mutableMapOf()
-    ){
+        val white: String, val black: String,
+        val board: Array<Array<Stone>> = Array(21) { Array(21) { Stone.EMPTY } },
+        var turnBlack: Boolean = true,
+        var winner: Stone? = null,
+        val cursors: MutableMap<String, Cursor> = mutableMapOf()
+    ) {
         fun place(x: Int, y: Int, s: Stone, self: String): Boolean {
             if (board[y][x] != Stone.EMPTY || winner != null) return false
             board[y][x] = s
@@ -77,14 +77,16 @@ object PluginMenus {
             return true
         }
 
-        private fun checkFive(x:Int,y:Int,s:Stone):Boolean{
-            fun count(dx:Int,dy:Int):Int{
-                var c=0; var nx=x+dx; var ny=y+dy
-                while(nx in 0 until 21 && ny in 0 until 21 && board[ny][nx]==s){ c++; nx+=dx; ny+=dy }
+        private fun checkFive(x: Int, y: Int, s: Stone): Boolean {
+            fun count(dx: Int, dy: Int): Int {
+                var c = 0; var nx = x + dx; var ny = y + dy
+                while (nx in 0 until 21 && ny in 0 until 21 && board[ny][nx] == s) {
+                    c++; nx += dx; ny += dy
+                }
                 return c
             }
-            val dirs = arrayOf(1 to 0,0 to 1,1 to 1,1 to -1)
-            return dirs.any{ (dx,dy)-> 1+count(dx,dy)+count(-dx,-dy)>=5 }
+            val dirs = arrayOf(1 to 0, 0 to 1, 1 to 1, 1 to -1)
+            return dirs.any { (dx, dy) -> 1 + count(dx, dy) + count(-dx, -dy) >= 5 }
         }
 
         override fun equals(other: Any?): Boolean {
@@ -114,13 +116,14 @@ object PluginMenus {
         }
     }
 
-    private fun key(u1:String,u2:String)=if(u1<u2) u1 to u2 else u2 to u1
-    private const val BOARD=21
-    private val invites=mutableMapOf<String,MutableList<Invite>>()
-    private val games  =mutableMapOf<Pair<String,String>,GomokuState>()
-    private const val INV_PREFIX="${PluginVars.SECONDARY}\uE861${PluginVars.RESET}"
-
-    private val gomokuMenuId:Int=Menus.registerMenu{ p, choice->
+    private fun key(u1: String, u2: String) = if (u1 < u2) u1 to u2 else u2 to u1
+    private const val BOARD = 21
+    private val invites = mutableMapOf<String, MutableList<Invite>>()
+    private val games = mutableMapOf<Pair<String, String>, GomokuState>()
+    private const val INV_PREFIX = "${PluginVars.SECONDARY}\uE861${PluginVars.RESET}"
+    private val lastInviteTimes = mutableMapOf<String, Long>()
+    private const val INVITE_COOLDOWN = 60_000L
+    private val gomokuMenuId: Int = Menus.registerMenu { p, choice ->
         val me = p ?: return@registerMenu
         val stateKey = games.keys.find { it.first == me.uuid() || it.second == me.uuid() } ?: run {
             Call.hideFollowUpMenu(me.con, gomokuMenuId)
@@ -139,8 +142,10 @@ object PluginMenus {
         val myStone = if (meBlack) Stone.BLACK else Stone.WHITE
         val myTurn = (state.turnBlack && meBlack) || (!state.turnBlack && !meBlack)
 
+        var needBroadcast = false
+
         when (choice) {
-            1,3,5,7 -> if (myTurn) {
+            1, 3, 5, 7 -> if (myTurn) {
                 when (choice) {
                     1 -> cur.y = (cur.y - 1 + BOARD) % BOARD
                     3 -> cur.x = (cur.x - 1 + BOARD) % BOARD
@@ -149,40 +154,50 @@ object PluginMenus {
                 }
             }
             9 -> if (myTurn) {
-                if(state.place(cur.x, cur.y, myStone, me.uuid())) state.turnBlack = !state.turnBlack
+                if (state.place(cur.x, cur.y, myStone, me.uuid())) {
+                    state.turnBlack = !state.turnBlack
+                    needBroadcast = true
+                }
             }
             10 -> {
                 showConfirmMenu(me) {
-                    games.remove(stateKey); Call.hideFollowUpMenu(me.con, gomokuMenuId); return@showConfirmMenu
+                    games.remove(stateKey)
+                    Call.hideFollowUpMenu(me.con, gomokuMenuId)
                 }
+                return@registerMenu
             }
             11 -> {
-                showConfirmMenu(me) {
-                    Call.hideFollowUpMenu(me.con, gomokuMenuId); return@showConfirmMenu
-                }
+                    Call.hideFollowUpMenu(me.con, gomokuMenuId)
+                return@registerMenu
             }
         }
 
-        val oppUuid = if (me.uuid() == stateKey.first) stateKey.second else stateKey.first
-        showGomokuBoard(me, state)
-        Groups.player.find { it.uuid() == oppUuid }?.let { showGomokuBoard(it, state) }
+        if (needBroadcast) {
+            val oppUuid = if (me.uuid() == stateKey.first) stateKey.second else stateKey.first
+            showGomokuBoard(me, state)
+            Groups.player.find { it.uuid() == oppUuid }?.let { showGomokuBoard(it, state) }
+        } else {
+            showGomokuBoard(me, state)
+        }
     }
 
-    fun showGomokuEntry(player:Player){
-        val uid=player.uuid()
-        games.keys.find{ it.first==uid||it.second==uid }?.let{
-            showGomokuBoard(player,games[it]!!); return
+
+    fun showGomokuEntry(player: Player) {
+        val uid = player.uuid()
+        games.keys.find { it.first == uid || it.second == uid }?.let {
+            showGomokuBoard(player, games[it]!!)
+            return
         }
-        val now=System.currentTimeMillis()
-        invites.values.forEach{ it.removeIf{ inv-> now-inv.time>300_000 } }
+        val now = System.currentTimeMillis()
+        invites.values.forEach { it.removeIf { inv -> now - inv.time > 300_000 } }
 
-        val alreadySent=invites.values.any{ lst->lst.any{ it.from==uid } }
-        val rows=mutableListOf<MenuEntry>()
+        val alreadySent = invites.values.any { lst -> lst.any { it.from == uid } }
+        val rows = mutableListOf<MenuEntry>()
 
-        invites[uid].orEmpty().forEach{ inv->
-            Groups.player.find{ it.uuid()==inv.from }?.let{ sender->
-                rows+=MenuEntry("$INV_PREFIX${PluginVars.SECONDARY} ${sender.name()}${PluginVars.RESET}"){
-                    if(games.keys.any{ it.first==uid||it.second==uid }) return@MenuEntry
+        invites[uid].orEmpty().forEach { inv ->
+            Groups.player.find { it.uuid() == inv.from }?.let { sender ->
+                rows += MenuEntry("$INV_PREFIX${PluginVars.SECONDARY} ${sender.name()}${PluginVars.RESET}") {
+                    if (games.keys.any { it.first == uid || it.second == uid }) return@MenuEntry
                     showConfirmMenu(player) {
                         if (invites.isNotEmpty()) {
                             startGame(sender.uuid(), uid)
@@ -193,53 +208,77 @@ object PluginMenus {
             }
         }
 
-        Groups.player.filter{ it.uuid()!=uid }.forEach{ p->
-            rows+=MenuEntry("${PluginVars.WHITE}${p.name()}${PluginVars.RESET}"){
-                if(alreadySent){
-                    Call.announce(player.con,"${PluginVars.WARN}${I18nManager.get("gomoku.inv.already",player)}${PluginVars.RESET}")
-                }else{
-                    showConfirmMenu(player){
-                        if(games.keys.any{ it.first==uid||it.second==uid }) return@showConfirmMenu
-                        val lst=invites.getOrPut(p.uuid()){ mutableListOf() }
-                        if(lst.none{ it.from==uid }) lst+=Invite(uid)
-                        Call.announce(player.con,"${PluginVars.INFO}${I18nManager.get("gomoku.inv.sent",player)}${PluginVars.RESET}")
+        Groups.player.filter { it.uuid() != uid }.forEach { p ->
+            rows += MenuEntry("${PluginVars.WHITE}${p.name()}${PluginVars.RESET}") {
+                val last = lastInviteTimes[uid] ?: 0
+                val delta = now - last
+                if (alreadySent) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("gomoku.inv.already", player)}${PluginVars.RESET}")
+                } else if (delta < INVITE_COOLDOWN) {
+                    val wait = ((INVITE_COOLDOWN - delta) / 1000).toInt()
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("gomoku.inv.cooldown", player)} ($wait s)${PluginVars.RESET}")
+                } else {
+                    showConfirmMenu(player) {
+                        if (games.keys.any { it.first == uid || it.second == uid }) return@showConfirmMenu
+                        val lst = invites.getOrPut(p.uuid()) { mutableListOf() }
+                        if (lst.none { it.from == uid }) lst += Invite(uid)
+                        lastInviteTimes[uid] = now
+                        Call.announce(player.con, "${PluginVars.INFO}${I18nManager.get("gomoku.inv.sent", player)}${PluginVars.RESET}")
+
+                        val title = "${PluginVars.GRAY}${I18nManager.get("gomoku.inv.title", p)}${PluginVars.RESET}"
+                        val desc = "${PluginVars.SECONDARY}${player.name()} ${I18nManager.get("gomoku.inv.desc", p)}${PluginVars.RESET}"
+
+                        createConfirmMenu(
+                            title = { title },
+                            desc = { desc },
+                            onResult = { target, choice ->
+                                if (choice == 0 && games.none { it.key.first == target.uuid() || it.key.second == target.uuid() }) {
+                                    startGame(player.uuid(), target.uuid())
+                                }
+                            }
+                        )(p)
                     }
                 }
             }
         }
 
         MenusManage.createMenu<Unit>(
-            title={_,_,_,_->"${PluginVars.GRAY}${I18nManager.get("gomoku.list",player)}${PluginVars.RESET}"},
-            desc={_,_,_->""},
-            paged=true,
-            options={_,_,_->rows}
-        )(player,1)
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("gomoku.list", player)}${PluginVars.RESET}" },
+            desc = { _, _, _ -> "" },
+            paged = false,
+            options = { _, _, _ -> rows }
+        )(player, 1)
     }
 
-    private fun startGame(u1:String,u2:String){
-        val k=key(u1,u2)
-        games[k]=GomokuState(white=k.first,black=k.second)
-        invites.remove(u1); invites.remove(u2)
-        invites.values.forEach{ it.removeIf{ inv-> inv.from==u1||inv.from==u2 } }
-        val s=games[k]!!
-        Groups.player.find{ it.uuid()==k.first }?.let{ showGomokuBoard(it,s) }
-        Groups.player.find{ it.uuid()==k.second }?.let{ showGomokuBoard(it,s) }
+    private fun startGame(inviter: String, invitee: String) {
+        val k = key(inviter, invitee)
+        games[k] = GomokuState(white = invitee, black = inviter)
+        invites.remove(inviter)
+        invites.remove(invitee)
+        invites.values.forEach { it.removeIf { inv -> inv.from == inviter || inv.from == invitee } }
+        val state = games[k]!!
+        Groups.player.find { it.uuid() == inviter }?.let { showGomokuBoard(it, state) }
+        Groups.player.find { it.uuid() == invitee }?.let { showGomokuBoard(it, state) }
     }
 
-    private fun showGomokuBoard(p:Player,state:GomokuState){
-        val cur=state.cursors.getOrPut(p.uuid()){ Cursor() }
-        val meBlack=p.uuid()==state.black
-        val myStone=if(meBlack) Stone.BLACK else Stone.WHITE
-        val myTurn =(state.turnBlack&&meBlack)||(!state.turnBlack&&!meBlack) && state.winner==null
 
-        val boardTxt=buildString{
-            repeat(BOARD){ y->
-                repeat(BOARD){ x->
+    private fun showGomokuBoard(p: Player, state: GomokuState) {
+        val cur = state.cursors.getOrPut(p.uuid()) { Cursor() }
+        val meBlack = p.uuid() == state.black
+        val myStone = if (meBlack) Stone.BLACK else Stone.WHITE
+        val myTurn = (state.turnBlack && meBlack) || (!state.turnBlack && !meBlack) && state.winner == null
+        val boardTxt = buildString {
+            repeat(BOARD) { y ->
+                repeat(BOARD) { x ->
+                    val stone = state.board[y][x]
+                    val isCursor = (x == cur.x && y == cur.y)
+
                     append(
-                        when{
-                            state.board[y][x]!=Stone.EMPTY -> state.board[y][x].glyph
-                            x==cur.x&&y==cur.y            -> ""
-                            else                          -> Stone.EMPTY.glyph
+                        when {
+                            isCursor && stone != Stone.EMPTY -> "${PluginVars.SECONDARY}${stone.glyph}${PluginVars.RESET}" // 光标在已有棋子上，改变颜色
+                            stone != Stone.EMPTY -> stone.glyph
+                            isCursor -> ""
+                            else -> Stone.EMPTY.glyph
                         }
                     )
                 }
@@ -247,32 +286,34 @@ object PluginMenus {
             }
         }
 
-        fun b(t:String,e:Boolean)=if(e) "${PluginVars.WHITE}$t${PluginVars.RESET}"
-        else   "${PluginVars.SECONDARY}$t${PluginVars.RESET}"
 
-        val buttons=arrayOf(
-            arrayOf("", b("\uE804",myTurn), ""),
-            arrayOf(b("\uE802",myTurn),"",b("\uE803",myTurn)),
-            arrayOf("", b("\uE805",myTurn), ""),
-            arrayOf(b(I18nManager.get("gomoku.select",p),myTurn)),
-            arrayOf(b(I18nManager.get("gomoku.end",p),true)),
-            arrayOf(b(I18nManager.get("gomoku.exit",p),true))
+        fun b(t: String, e: Boolean) = if (e) "${PluginVars.WHITE}$t${PluginVars.RESET}"
+        else "${PluginVars.SECONDARY}$t${PluginVars.RESET}"
+
+        val buttons = arrayOf(
+            arrayOf("", b("\uE804", myTurn), ""),
+            arrayOf(b("\uE802", myTurn), "", b("\uE803", myTurn)),
+            arrayOf("", b("\uE805", myTurn), ""),
+            arrayOf(b(I18nManager.get("gomoku.select", p), myTurn)),
+            arrayOf(b(I18nManager.get("gomoku.end", p), true)),
+            arrayOf(b(I18nManager.get("gomoku.exit", p), true))
         )
 
-        val info = when{
-            state.winner==myStone -> I18nManager.get("gomoku.win",p)
-            state.winner!=null    -> I18nManager.get("gomoku.lose",p)
-            myTurn                -> I18nManager.get("gomoku.yourturn",p)
-            else                  -> I18nManager.get("gomoku.wait",p)
+        val info = when {
+            state.winner == myStone -> I18nManager.get("gomoku.win", p)
+            state.winner != null -> I18nManager.get("gomoku.lose", p)
+            myTurn -> I18nManager.get("gomoku.yourturn", p)
+            else -> I18nManager.get("gomoku.wait", p)
         }
 
         Call.followUpMenu(
-            p.con,gomokuMenuId,
-            "${PluginVars.GRAY}${I18nManager.get("gomoku.title",p)}${PluginVars.RESET}",
+            p.con, gomokuMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("gomoku.title", p)}${PluginVars.RESET}",
             "\n${PluginVars.INFO}$info${PluginVars.RESET}\n\n$boardTxt",
             buttons
         )
     }
+
 
     private enum class Hint { LOW, HIGH, NONE }
 
@@ -729,11 +770,14 @@ object PluginMenus {
         }
 
         MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("snapshot.title", player)}${PluginVars.RESET}" },
+            title = { _, pageNum, totalPages, _ ->
+                "${PluginVars.GRAY}${I18nManager.get("snapshot.title", player)} ${pageNum}/${totalPages}${PluginVars.RESET}"
+            },
             desc = { _, _, _ -> "" },
             paged = true,
             options = { _, _, _ -> rows }
         )(player, page)
+
     }
 
     fun showSnapshotOptionsMenu(player: Player, file: arc.files.Fi, mapName: String, index: Int) {
@@ -750,7 +794,7 @@ object PluginMenus {
                 loadSnapshot(file)
                 Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("rtv.changed_alone", player)}${PluginVars.RESET}")
             } else {
-                if ((DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0) < 100) {
+                if ((DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0) < 20 && !player.admin) {
                     Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("noPoints", player)}${PluginVars.RESET}")
                     return@MenuEntry
                 }
@@ -1439,7 +1483,12 @@ object PluginMenus {
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
         val isAdmin = isCoreAdmin(player.uuid())
         val normalCount = Groups.player.count { isNormal(it.uuid()) }
-        val mapMode = TagUtil.getMode(map.description())
+        val fileName = map.file.name()
+        val mapMode = DataManager.maps[fileName]?.modeName
+            ?.lowercase()
+            ?.let { mode -> Gamemode.entries.find { it.name.equals(mode, ignoreCase = true) } }
+            ?: TagUtil.getMode(map.description())
+
         val isOk = isAdmin || normalCount < 2
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY

@@ -1,53 +1,27 @@
 package plugin.core
 
 import arc.func.Cons
-import com.deepl.api.DeepLClient
-import com.deepl.api.TextResult
+import arc.util.Http
+import arc.util.Strings
+import arc.util.serialization.JsonReader
 
 object Translator {
-    private const val API_KEY = "c0093f4a-3d4a-4ba5-b230-830460627211:fx"
-    private val supported = setOf("EN-GB", "RU", "JA", "KO", "ZH")
-
-    private val client = DeepLClient(API_KEY)
-
-    private fun normalizeLang(input: String): String {
-        val u = input.trim().uppercase()
-        return when {
-            u.startsWith("EN") -> "EN-GB"
-            u.startsWith("RU") -> "RU"
-            u.startsWith("JA") -> "JA"
-            u.startsWith("KO") -> "KO"
-            u.startsWith("ZH") -> "ZH"
-            else -> u
-        }
-    }
-
+    private val reader = JsonReader()
     fun translate(
         text: String,
-        from: String?,
+        from: String,
         to: String,
         onResult: Cons<String>,
         onError: Runnable
     ) {
-        Thread {
-            val tgt = normalizeLang(to)
-            if (tgt !in supported) {
-                onError.run()
-                return@Thread
-            }
+        val url = "https://clients5.google.com/translate_a/t?client=dict-chrome-ex&dt=t"
+        val query = "tl=$to&sl=$from&q=${Strings.encode(text)}"
 
-            val src = from?.trim()?.let {
-                val u = it.uppercase()
-                if (u.isBlank() || u == "AUTO") null else normalizeLang(u)
+        Http.post(url, query)
+            .error { onError.run() }
+            .submit { response ->
+                val resultText = reader.parse(response.resultAsString).get(0).get(0).asString()
+                onResult.get(resultText)
             }
-
-            try {
-                val res: TextResult = client.translateText(text, src, tgt)
-                onResult.get(res.text)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                onError.run()
-            }
-        }.start()
     }
 }

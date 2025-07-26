@@ -15,11 +15,10 @@ repositories {
 }
 
 dependencies {
-    compileOnly("com.github.Anuken.Arc:arc-core:v149")
-    compileOnly("com.github.Anuken.Mindustry:core:v149")
+    compileOnly("com.github.Anuken.Arc:arc-core:v150")
+    compileOnly("com.github.Anuken.Mindustry:core:v150")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.maxmind.geoip2:geoip2:4.3.0")
-    implementation("com.deepl.api:deepl-java:1.10.2")
 }
 
 kotlin {
