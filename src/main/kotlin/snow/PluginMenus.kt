@@ -11,6 +11,7 @@ import mindustry.game.Rules
 import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
+import mindustry.gen.Iconc
 import mindustry.gen.Player
 import mindustry.io.SaveIO
 import mindustry.net.Packets
@@ -24,6 +25,7 @@ import plugin.core.PermissionManager.isBanned
 import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PermissionManager.isNormal
 import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
+import java.lang.reflect.Modifier
 import kotlin.math.max
 import kotlin.math.pow
 
@@ -2317,6 +2319,7 @@ object PluginMenus {
         val current = RevertBuild.RevertState.getHistoryMode(uuid)
 
         val i18nShowHistory = I18nManager.get("others.showHistory", player)
+        val i18nShowIcons = I18nManager.get("icons.title", player)
 
         val historyModeState = if (current) "true" else "false"
 
@@ -2325,9 +2328,14 @@ object PluginMenus {
             Call.announce(player.con, I18nManager.get("ok", player))
             RevertBuild.RevertState.setHistoryMode(uuid, newState)
         }
+        val showIconsBtn = MenuEntry("${strong}${i18nShowIcons}${PluginVars.RESET}") {
+            showIconMenu(player)
+        }
 
-        val rows = listOf(toggleHistoryBtn)
-
+        val rows = listOf(
+            toggleHistoryBtn,
+            showIconsBtn
+        )
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("others.title", player)}${PluginVars.RESET}" },
             paged = false,
@@ -2336,6 +2344,63 @@ object PluginMenus {
         )(player, 1)
     }
 
+    private val iconMenuId: Int = Menus.registerMenu { p, choice ->
+        val player = p ?: return@registerMenu
+        if (choice == 0) {
+            Call.hideFollowUpMenu(player.con, iconMenuId)
+            return@registerMenu
+        }
 
+        val allIcons = Iconc::class.java.fields
+            .filter { Modifier.isStatic(it.modifiers) && it.type == Char::class.javaPrimitiveType }
+            .mapNotNull {
+                try { (it.get(null) as Char).toString() }
+                catch (_: Exception) { null }
+            }
 
+        val buildingIcons = Vars.content.blocks().map { GetIcon.getBuildingIcon(it) }
+        val unitIcons     = Vars.content.units().map { GetIcon.getUnitIcon(it) }
+        val icons = allIcons + buildingIcons + unitIcons
+
+        val idx = choice - 1
+        if (idx in icons.indices) {
+            val icon = icons[idx]
+            val iconInput = MenusManage.createTextInput(
+                title       = I18nManager.get("icons.title", player),
+                desc        = "",
+                placeholder = icon,
+                isNum       = false,
+                maxChars    = PluginVars.MENU_TEXT_INPUT_MAX_CHARS
+            ) { _, input ->
+            }
+            iconInput(player)
+        }
+    }
+
+    fun showIconMenu(player: Player) {
+        val allIcons = Iconc::class.java.fields
+            .filter { Modifier.isStatic(it.modifiers) && it.type == Char::class.javaPrimitiveType }
+            .mapNotNull {
+                try { (it.get(null) as Char).toString() }
+                catch (_: Exception) { null }
+            }
+
+        val buildingIcons = Vars.content.blocks().map { GetIcon.getBuildingIcon(it) }
+        val unitIcons     = Vars.content.units().map { GetIcon.getUnitIcon(it) }
+        val icons = allIcons + buildingIcons + unitIcons
+
+        val rows = mutableListOf<Array<String>>()
+        rows += arrayOf("${PluginVars.GRAY}\u2716${PluginVars.RESET}")
+        icons.chunked(5).forEach { chunk ->
+            rows += chunk.map { "${PluginVars.WHITE}$it${PluginVars.RESET}" }.toTypedArray()
+        }
+
+        Call.followUpMenu(
+            player.con,
+            iconMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("icons.title", player)}${PluginVars.RESET}",
+            "",
+            rows.toTypedArray()
+        )
+    }
 }
