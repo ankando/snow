@@ -28,3 +28,7 @@ replay_pid*
 
 # macOS system files
 .DS_Store
+
+.idea
+
+build
