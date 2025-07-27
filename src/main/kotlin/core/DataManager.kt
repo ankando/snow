@@ -1,7 +1,6 @@
 package plugin.core
 
 import arc.struct.ObjectMap
-import arc.util.Log
 import arc.util.serialization.Json
 import mindustry.Vars
 

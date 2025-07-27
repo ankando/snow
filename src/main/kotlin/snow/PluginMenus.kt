@@ -184,10 +184,12 @@ object PluginMenus {
 
     fun showGomokuEntry(player: Player) {
         val uid = player.uuid()
+
         games.keys.find { it.first == uid || it.second == uid }?.let {
             showGomokuBoard(player, games[it]!!)
             return
         }
+
         val now = System.currentTimeMillis()
         invites.values.forEach { it.removeIf { inv -> now - inv.time > 300_000 } }
 
@@ -195,7 +197,9 @@ object PluginMenus {
         val rows = mutableListOf<MenuEntry>()
 
         invites[uid].orEmpty().forEach { inv ->
-            Groups.player.find { it.uuid() == inv.from }?.let { sender ->
+            val sender = Groups.player.find { it.uuid() == inv.from }
+
+            if (sender != null && games.keys.none { it.first == sender.uuid() || it.second == sender.uuid() }) {
                 rows += MenuEntry("$INV_PREFIX${PluginVars.SECONDARY} ${sender.name()}${PluginVars.RESET}") {
                     if (games.keys.any { it.first == uid || it.second == uid }) return@MenuEntry
                     showConfirmMenu(player) {
@@ -208,39 +212,41 @@ object PluginMenus {
             }
         }
 
-        Groups.player.filter { it.uuid() != uid }.forEach { p ->
-            rows += MenuEntry("${PluginVars.WHITE}${p.name()}${PluginVars.RESET}") {
-                val last = lastInviteTimes[uid] ?: 0
-                val delta = now - last
-                if (alreadySent) {
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("gomoku.inv.already", player)}${PluginVars.RESET}")
-                } else if (delta < INVITE_COOLDOWN) {
-                    val wait = ((INVITE_COOLDOWN - delta) / 1000).toInt()
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("gomoku.inv.cooldown", player)} ($wait s)${PluginVars.RESET}")
-                } else {
-                    showConfirmMenu(player) {
-                        if (games.keys.any { it.first == uid || it.second == uid }) return@showConfirmMenu
-                        val lst = invites.getOrPut(p.uuid()) { mutableListOf() }
-                        if (lst.none { it.from == uid }) lst += Invite(uid)
-                        lastInviteTimes[uid] = now
-                        Call.announce(player.con, "${PluginVars.INFO}${I18nManager.get("gomoku.inv.sent", player)}${PluginVars.RESET}")
+        Groups.player
+            .filter { it.uuid() != uid && games.keys.none { g -> g.first == it.uuid() || g.second == it.uuid() } }
+            .forEach { p ->
+                rows += MenuEntry("${PluginVars.WHITE}${p.name()}${PluginVars.RESET}") {
+                    val last = lastInviteTimes[uid] ?: 0
+                    val delta = now - last
+                    if (alreadySent) {
+                        Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("gomoku.inv.already", player)}${PluginVars.RESET}")
+                    } else if (delta < INVITE_COOLDOWN) {
+                        val wait = ((INVITE_COOLDOWN - delta) / 1000).toInt()
+                        Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("gomoku.inv.cooldown", player)} ($wait s)${PluginVars.RESET}")
+                    } else {
+                        showConfirmMenu(player) {
+                            if (games.keys.any { it.first == uid || it.second == uid }) return@showConfirmMenu
+                            val lst = invites.getOrPut(p.uuid()) { mutableListOf() }
+                            if (lst.none { it.from == uid }) lst += Invite(uid)
+                            lastInviteTimes[uid] = now
+                            Call.announce(player.con, "${PluginVars.INFO}${I18nManager.get("gomoku.inv.sent", player)}${PluginVars.RESET}")
 
-                        val title = "${PluginVars.GRAY}${I18nManager.get("gomoku.inv.title", p)}${PluginVars.RESET}"
-                        val desc = "${PluginVars.SECONDARY}${player.name()} ${I18nManager.get("gomoku.inv.desc", p)}${PluginVars.RESET}"
+                            val title = "${PluginVars.GRAY}${I18nManager.get("gomoku.inv.title", p)}${PluginVars.RESET}"
+                            val desc = "${PluginVars.SECONDARY}${player.name()} ${I18nManager.get("gomoku.inv.desc", p)}${PluginVars.RESET}"
 
-                        createConfirmMenu(
-                            title = { title },
-                            desc = { desc },
-                            onResult = { target, choice ->
-                                if (choice == 0 && games.none { it.key.first == target.uuid() || it.key.second == target.uuid() }) {
-                                    startGame(player.uuid(), target.uuid())
+                            createConfirmMenu(
+                                title = { title },
+                                desc = { desc },
+                                onResult = { target, choice ->
+                                    if (choice == 0 && games.none { it.key.first == target.uuid() || it.key.second == target.uuid() }) {
+                                        startGame(player.uuid(), target.uuid())
+                                    }
                                 }
-                            }
-                        )(p)
+                            )(p)
+                        }
                     }
                 }
             }
-        }
 
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("gomoku.list", player)}${PluginVars.RESET}" },
@@ -249,6 +255,7 @@ object PluginMenus {
             options = { _, _, _ -> rows }
         )(player, 1)
     }
+
 
     private fun startGame(inviter: String, invitee: String) {
         val k = key(inviter, invitee)
@@ -1054,8 +1061,11 @@ object PluginMenus {
             .chunked(4)
             .map { row ->
                 row.map { b ->
-                    val col = if (banned.contains(b)) PluginVars.SECONDARY else PluginVars.WHITE
-                    "$col${b.localizedName}${PluginVars.RESET}"
+                    val isBanned = banned.contains(b)
+                    val col = if (isBanned) PluginVars.SECONDARY else PluginVars.WHITE
+                    val icon = GetIcon.getBuildingIcon(b)
+                    val prefix = if (isBanned) "" else ""
+                    "$col$prefix$icon${PluginVars.RESET}"
                 }.toTypedArray()
             }.toMutableList()
 
@@ -1075,8 +1085,11 @@ object PluginMenus {
             .chunked(4)
             .map { row ->
                 row.map { u ->
-                    val col = if (banned.contains(u)) PluginVars.SECONDARY else PluginVars.WHITE
-                    "$col${u.localizedName}${PluginVars.RESET}"
+                    val isBanned = banned.contains(u)
+                    val col = if (isBanned) PluginVars.SECONDARY else PluginVars.WHITE
+                    val icon = GetIcon.getUnitIcon(u)
+                    val prefix = if (isBanned) "" else ""
+                    "$col$prefix$icon${PluginVars.RESET}"
                 }.toTypedArray()
             }.toMutableList()
 
@@ -1089,6 +1102,8 @@ object PluginMenus {
             rows.toTypedArray()
         )
     }
+
+
 
     fun showGameOverMenu(player: Player) {
         if (!isCoreAdmin(player.uuid())) {
@@ -1344,6 +1359,7 @@ object PluginMenus {
                 DataManager.updatePlayer(acc.id) {
                     it.banUntil = if (seconds == 0L) 0 else System.currentTimeMillis() + seconds * 1000
                 }
+                viewer.kick("")
                 Call.announce(
                     viewer.con,
                     "${PluginVars.SUCCESS}${I18nManager.get("playerInfo.setban.success", viewer)}${PluginVars.RESET}"
@@ -2004,7 +2020,10 @@ object PluginMenus {
                 lang = player.locale()
             )
             if (Vars.state.rules.pvp) {
+                player.team(Team.derelict)
                 showTeamMenu(player)
+            } else {
+                player.team(Vars.state.rules.defaultTeam)
             }
         }
         regName(player)
@@ -2289,5 +2308,34 @@ object PluginMenus {
             }
         )(player)
     }
+
+    fun showOthersMenu(player: Player) {
+        val strong = PluginVars.WHITE
+        val weak = PluginVars.WARN
+        val uuid = player.uuid()
+
+        val current = RevertBuild.RevertState.getHistoryMode(uuid)
+
+        val i18nShowHistory = I18nManager.get("others.showHistory", player)
+
+        val historyModeState = if (current) "true" else "false"
+
+        val toggleHistoryBtn = MenuEntry("${strong}$i18nShowHistory: ${weak}$historyModeState${PluginVars.RESET}") {
+            val newState = !current
+            Call.announce(player.con, I18nManager.get("ok", player))
+            RevertBuild.RevertState.setHistoryMode(uuid, newState)
+        }
+
+        val rows = listOf(toggleHistoryBtn)
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("others.title", player)}${PluginVars.RESET}" },
+            paged = false,
+            desc = { _, _, _ -> "" },
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+
+
 
 }

@@ -36,6 +36,8 @@ object EventManager {
             }
         }
 
+
+
         Events.on(PlayerConnectionConfirmed::class.java) { e ->
             val player = e.player
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
@@ -81,6 +83,34 @@ object EventManager {
             RevertBuild.clearAll()
             VoteManager.clearVote()
             NextMap.clear()
+        }
+
+        Events.on(BlockBuildEndEvent::class.java) { event ->
+            val unit = event.unit ?: return@on
+            val player = unit.player ?: return@on
+            val tile = event.tile ?: return@on
+            if (!event.breaking) {
+                RevertBuild.recordBuild(player, tile)
+            }
+        }
+
+        Events.on(BlockBuildBeginEvent::class.java) { event ->
+            val unit = event.unit ?: return@on
+            val player = unit.player ?: return@on
+            val tile = event.tile ?: return@on
+            if (event.breaking) {
+                RevertBuild.recordRemove(player, tile)
+            }
+        }
+
+        Events.on(TapEvent::class.java) { event ->
+            val tile = event.tile ?: return@on
+            val player = event.player
+            val uuid = player.uuid()
+
+            if (RevertBuild.RevertState.getHistoryMode(uuid)) {
+                RevertBuild.showHistory(event.player, tile.x, tile.y )
+            }
         }
 
         Events.on(PlayEvent::class.java) {
@@ -162,8 +192,6 @@ object EventManager {
                 NextMap.set(it)
             }
         }
-
-
 
     }
 

@@ -10,10 +10,7 @@ object TagUtil {
             .distinct()
             .toList()
     }
-    fun getTagValue(desc: String, tag: String): String? {
-        val regex = Regex("""\[@${Regex.escape(tag.lowercase())}=([^]]+)]""")
-        return regex.find(desc.lowercase())?.groupValues?.getOrNull(1)
-    }
+
     fun getMode(desc: String): Gamemode? {
         val modeTags = mapOf(
             "pvp" to Gamemode.pvp,

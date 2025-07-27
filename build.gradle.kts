@@ -25,15 +25,7 @@ kotlin {
     jvmToolchain(17)
 }
 
-tasks.withType<JavaCompile> {
-    options.encoding = "UTF-8"
-}
-
-tasks.withType<ProcessResources> {
-    filesMatching("**/*.properties") {}
-}
-
-fun File.safeReadUtf8Lines(): List<String> {
+fun File.readUtf8Lines(): List<String> {
     val bytes = readBytes()
     return when {
         bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte() ->
@@ -92,7 +84,7 @@ val syncI18nBundles by tasks.registering {
             else
                 File(resourcesDir, "bundle_${lang}.properties")
 
-            val lines = if (file.exists()) file.safeReadUtf8Lines() else emptyList()
+            val lines = if (file.exists()) file.readUtf8Lines() else emptyList()
             val map = linkedMapOf<String, String>()
             lines.forEach { line ->
                 val trimmed = line.trim()
