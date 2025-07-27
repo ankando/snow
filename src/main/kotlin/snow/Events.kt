@@ -13,6 +13,7 @@ import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.TagUtil.getMode
 import plugin.snow.PluginMenus.showAuthMenu
 import plugin.snow.PluginMenus.showTeamMenu
+import kotlin.math.exp
 import kotlin.math.max
 
 object EventManager {

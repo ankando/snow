@@ -90,7 +90,7 @@ object RevertBuild {
                 count += 1
                 val name = Vars.netServer.admins
                     .getInfoOptional(uuid)
-                    ?.lastName ?: "@$uuid"
+                    ?.lastName ?: "unknown"
                 val icon = GetIcon.getBuildingIcon(edit.block)
                 val deltaSec = ((nowNanos - edit.timeNanos) / 1_000_000_000L).toString()
                 val action = if (edit.destroy) I18nManager.get("revertbuild.removed", caller) else I18nManager.get("revertbuild.built", caller)
