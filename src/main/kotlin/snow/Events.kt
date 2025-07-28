@@ -37,7 +37,7 @@ object EventManager {
                 player.admin = true
             }
             RecordMessage.add("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("joined", player)}${PluginVars.RESET}")
-            Groups.player.each { p ->  Call.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("joined", p)}${PluginVars.RESET}")}
+            Groups.player.each { p ->  p.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("joined", p)}${PluginVars.RESET}")}
         }
 
 
@@ -69,7 +69,7 @@ object EventManager {
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
             if (pData != null) {
                 RecordMessage.add("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("left", player)}${PluginVars.RESET}")
-                Groups.player.each { p ->  Call.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("left", p)}${PluginVars.RESET}")}
+                Groups.player.each { p ->  p.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("left", p)}${PluginVars.RESET}")}
             }
         }
 
