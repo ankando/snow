@@ -9,10 +9,6 @@ object PermissionManager {
         return data == null || data.banUntil > System.currentTimeMillis()
     }
 
-    fun isNormal(uuid: String): Boolean {
-        return !isBanned(uuid) && DataManager.getPlayerDataByUuid(uuid) != null
-    }
-
     fun isCoreAdmin(uuid: String): Boolean {
         return DataManager.getPlayerDataByUuid(uuid)
             ?.uuids

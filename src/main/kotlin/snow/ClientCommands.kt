@@ -3,6 +3,7 @@ package plugin.snow
 import arc.util.CommandHandler
 import arc.util.Strings
 import arc.util.Time
+import mindustry.Vars
 import mindustry.Vars.netServer
 import mindustry.game.Team
 import mindustry.gen.Call
@@ -11,7 +12,7 @@ import mindustry.gen.Player
 import plugin.core.*
 import plugin.core.PermissionManager.isBanned
 import plugin.core.PermissionManager.isCoreAdmin
-import plugin.core.PermissionManager.isNormal
+import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
 import plugin.core.Translator.translate
 import plugin.snow.PluginMenus.beginVotekick
 import plugin.snow.PluginMenus.showConfirmMenu
@@ -62,7 +63,7 @@ object ClientCommands {
             PluginMenus.showGamesMenu(player)
         }
         register("join", "", "helpCmd.join") { _, player ->
-            if (player.team() != Team.derelict) {
+            if (!Vars.state.rules.pvp || !PlayerTeam.wasAutoAssigned(player.uuid())) {
                 Call.announce(player.con, I18nManager.get("join.joined", player))
                 return@register
             }
@@ -72,8 +73,50 @@ object ClientCommands {
         register("rules", "", "helpCmd.rules") { _, player ->
             PluginMenus.showRulesMenu(player)
         }
+        register("ban", "<id> <seconds>", "Ban a player by id") { args, viewer ->
+            if (args.size != 2) return@register
+
+            val id = args[0].toIntOrNull()
+            val seconds = args[1].toLongOrNull()
+
+            if (id == null || seconds == null || seconds <= 0) {
+                Call.announce(viewer.con, "${PluginVars.WARN}Invalid arguments.${PluginVars.RESET}")
+                return@register
+            }
+
+            val playerData = DataManager.players[id]
+            if (playerData == null) {
+                Call.announce(viewer.con, "${PluginVars.WARN}Player not found.${PluginVars.RESET}")
+                return@register
+            }
+
+            val banUntil = System.currentTimeMillis() + seconds * 1000
+            playerData.banUntil = banUntil
+
+            Groups.player.each { target ->
+                if (target != null && playerData.uuids.contains(target.uuid())) {
+                    target.kick("")
+                    restorePlayerEditsWithinSeconds(target.uuid(), 200)
+                    UnitEffects.clear(target.uuid())
+                }
+            }
+
+            Call.announce(
+                viewer.con,
+                "${PluginVars.SUCCESS}${I18nManager.get("playerInfo.setban.success", viewer)}${PluginVars.RESET}"
+            )
+
+            DataManager.requestSave()
+        }
+
         register("upload", "", "helpCmd.upload") { _, player ->
             PluginMenus.showUploadMapMenu(player)
+        }
+        register("message", "", "helpCmd.message") { _, player ->
+            PluginMenus.showMessageMenu(player)
+        }
+        register("about", "", "helpCmd.about") { _, player ->
+            PluginMenus.showAboutMenu(player)
         }
         register("snapshot", "", "helpCmd.snapshot") { args, player ->
             PluginMenus.showSnapshotMenu(player)
@@ -217,7 +260,7 @@ object ClientCommands {
                     }
                 }
                 Groups.player.each { p ->
-                    if (p.team() == team && p != player && !p.dead() && isNormal(p.uuid())) {
+                    if (p.team() == team && p != player && !p.dead() && !isBanned(p.uuid())) {
                         val title = "${PluginVars.WARN}${I18nManager.get("surrender.vote.title", p)}${PluginVars.RESET}"
                         val desc = "${PluginVars.GRAY}${I18nManager.get("surrender.vote.desc", p)}${PluginVars.RESET}"
 

@@ -10,10 +10,11 @@ import mindustry.gen.Groups
 import mindustry.gen.Sounds
 import plugin.core.*
 import plugin.core.PermissionManager.isCoreAdmin
+import plugin.core.PlayerTeam.wasAutoAssigned
+import plugin.core.ShowLabel.showMapLabel
 import plugin.core.TagUtil.getMode
 import plugin.snow.PluginMenus.showAuthMenu
 import plugin.snow.PluginMenus.showTeamMenu
-import kotlin.math.exp
 import kotlin.math.max
 
 object EventManager {
@@ -35,6 +36,8 @@ object EventManager {
             if (isCoreAdmin(player.uuid())) {
                 player.admin = true
             }
+            RecordMessage.add("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("joined", player)}${PluginVars.RESET}")
+            Groups.player.each { p ->  Call.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("joined", p)}${PluginVars.RESET}")}
         }
 
 
@@ -42,15 +45,18 @@ object EventManager {
         Events.on(PlayerConnectionConfirmed::class.java) { e ->
             val player = e.player
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
-            if (pData != null && Vars.state.rules.pvp &&
-                (player.team() == null || player.team() == Team.derelict)
+
+            if (pData != null && Vars.state.rules.pvp && wasAutoAssigned(player.uuid())
             ) {
                 showTeamMenu(player)
             }
+            showMapLabel(player)
         }
 
+
         Events.on(PlayerLeave::class.java) { e ->
-            val uuid = e.player.uuid()
+            val player = e.player
+            val uuid = player.uuid()
             when (uuid) {
                 VoteManager.globalVoteCreator?.uuid() -> VoteManager.clearVote()
                 in VoteManager.globalVoteExcluded -> DataManager.getPlayerDataByUuid(uuid)
@@ -59,6 +65,11 @@ object EventManager {
                             it.banUntil = System.currentTimeMillis() + 600_000
                         }
                     }
+            }
+            val pData = DataManager.getPlayerDataByUuid(player.uuid())
+            if (pData != null) {
+                RecordMessage.add("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("left", player)}${PluginVars.RESET}")
+                Groups.player.each { p ->  Call.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("left", p)}${PluginVars.RESET}")}
             }
         }
 
@@ -80,7 +91,7 @@ object EventManager {
         }
 
         Events.on(ResetEvent::class.java) {
-            PlayerTeamManager.clear()
+            PlayerTeam.clear()
             RevertBuild.clearAll()
             VoteManager.clearVote()
             NextMap.clear()
@@ -197,14 +208,14 @@ object EventManager {
     }
 
     private fun handlePvpGameOver(winner: Team) {
-        val teamCounts = PlayerTeamManager.all().values
+        val teamCounts = PlayerTeam.all().values
             .filter { it != Team.derelict }
             .groupingBy { it }
             .eachCount()
 
         val winScore = max(25, 40 - max(1, Groups.player.count { it.team() == winner }) * 4)
 
-        PlayerTeamManager.all().forEach { (uuid, team) ->
+        PlayerTeam.all().forEach { (uuid, team) ->
             if (team == Team.derelict) return@forEach
             val acc = DataManager.getPlayerDataByUuid(uuid) ?: return@forEach
             val pl = Groups.player.find { it.uuid() == uuid } ?: return@forEach

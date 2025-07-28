@@ -23,9 +23,9 @@ import plugin.core.*
 import plugin.core.MenusManage.createConfirmMenu
 import plugin.core.PermissionManager.isBanned
 import plugin.core.PermissionManager.isCoreAdmin
-import plugin.core.PermissionManager.isNormal
 import plugin.core.RevertBuild.restorePlayerEditsWithinSeconds
 import java.lang.reflect.Modifier
+import kotlin.math.absoluteValue
 import kotlin.math.max
 import kotlin.math.pow
 
@@ -35,7 +35,8 @@ object PluginMenus {
             "2048"                                                    to ::show2048game,
             I18nManager.get("game.lightsout",     player)            to ::showLightsOutGame,
             I18nManager.get("game.guessthenumber", player)           to ::showGuessGameMenu,
-            I18nManager.get("game.gomoku",         player)           to ::showGomokuEntry
+            I18nManager.get("game.gomoku",         player)           to ::showGomokuEntry,
+            "中国象棋"                                                       to::showXiangqiEntry
         )
 
         val menu = MenusManage.createMenu<Unit>(
@@ -55,8 +56,388 @@ object PluginMenus {
 
         menu(player, page)
     }
+    private enum class Piece(val id: Int) {
+        SOLDIER(1), CANNON(2), HORSE(3), ELEPHANT(4), ADVISOR(5), ROOK(6), KING(7)
+    }
 
+    private data class Cell(val piece: Piece, val red: Boolean)
+    private data class XCursor(var x: Int = 4, var y: Int = 10)
+    private data class XInvite(val from: String, val time: Long = System.currentTimeMillis())
 
+    private const val COLS = 9
+    private const val ROWS = 11
+    private fun river(y: Int) = y == 5
+    private fun glyph(id: Int) = tileSprites[id] ?: tileSprites[0]!!
+
+    private data class XqState(
+        val red: String,
+        val black: String,
+        val board: Array<Array<Cell?>> = initBoard(),
+        var redTurn: Boolean = true,
+        var winner: Boolean? = null,
+        val cursors: MutableMap<String, XCursor> = mutableMapOf(),
+        var selected: Pair<Int, Int>? = null
+    ) {
+        private fun inBoard(x: Int, y: Int) = x in 0 until COLS && y in 0 until ROWS
+        private fun cell(x: Int, y: Int) = if (inBoard(x, y)) board[y][x] else null
+        private fun generalAlive(redSide: Boolean) = board.any { row -> row.any { it?.piece == Piece.KING && it.red == redSide } }
+
+        fun selectOrMove(uid: String, cx: Int, cy: Int): Boolean {
+            if (winner != null) return false
+            val isRed = uid == red
+            if (isRed != redTurn) return false
+            val curCell = cell(cx, cy)
+            val sel = selected
+            return if (sel == null) {
+                if (curCell == null || curCell.red != isRed) return false
+                selected = cx to cy
+                true
+            } else {
+                val (sx, sy) = sel
+                val selCell = board[sy][sx] ?: return false
+                val legal = legalMoves(sx, sy, selCell)
+                when {
+                    cx to cy == sel -> {
+                        selected = null
+                        true
+                    }
+                    cx to cy in legal -> {
+                        board[cy][cx] = selCell
+                        board[sy][sx] = null
+                        selected = null
+                        redTurn = !redTurn
+                        if (!generalAlive(!isRed)) winner = isRed
+                        true
+                    }
+                    curCell != null && curCell.red == isRed -> {
+                        selected = cx to cy
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
+
+        fun legalMoves(x: Int, y: Int, cell: Cell): List<Pair<Int, Int>> {
+            if (!inBoard(x, y)) return emptyList()
+            val redSide = cell.red
+            val list = mutableListOf<Pair<Int, Int>>()
+
+            fun canLand(nx: Int, ny: Int): Boolean {
+                if (!inBoard(nx, ny)) return false
+                if (river(ny)) return false
+                val t = board[ny][nx]
+                return t == null || t.red != redSide
+            }
+            fun add(nx: Int, ny: Int) { if (canLand(nx, ny)) list += nx to ny }
+
+            when (cell.piece) {
+                Piece.KING -> {
+                    val palaceX = 3..5
+                    val palaceY = if (redSide) 8..10 else 0..2
+                    arrayOf(1 to 0, -1 to 0, 0 to 1, 0 to -1).forEach { (dx, dy) ->
+                        val nx = x + dx
+                        val ny = y + dy
+                        if (nx in palaceX && ny in palaceY) add(nx, ny)
+                    }
+                    var ny = y + if (redSide) -1 else 1
+                    while (inBoard(x, ny)) {
+                        val c = board[ny][x]
+                        if (c != null) {
+                            if (c.piece == Piece.KING && c.red != redSide) list += x to ny
+                            break
+                        }
+                        ny += if (redSide) -1 else 1
+                    }
+                }
+                Piece.ADVISOR -> {
+                    val palaceX = 3..5
+                    val palaceY = if (redSide) 8..10 else 0..2
+                    arrayOf(1 to 1, 1 to -1, -1 to 1, -1 to -1).forEach { (dx, dy) ->
+                        val nx = x + dx
+                        val ny = y + dy
+                        if (nx in palaceX && ny in palaceY) add(nx, ny)
+                    }
+                }
+                Piece.ELEPHANT -> {
+                    val dirs = arrayOf(2 to 2, 2 to -2, -2 to 2, -2 to -2)
+                    for ((dx, dy) in dirs) {
+                        val nx = x + dx
+                        val ny = y + dy
+                        val eyeX = x + dx / 2
+                        val eyeY = y + dy / 2
+                        if (!inBoard(nx, ny)) continue
+                        if (river(ny)) continue
+                        if (redSide && ny < 6) continue
+                        if (!redSide && ny > 3) continue
+                        if (board[eyeY][eyeX] == null) add(nx, ny)
+                    }
+                }
+                Piece.HORSE -> {
+                    val steps = arrayOf(
+                        2 to 1, 1 to 2, -1 to 2, -2 to 1,
+                        -2 to -1, -1 to -2, 1 to -2, 2 to -1
+                    )
+                    for ((dx, dy) in steps) {
+                        val legX = x + if (dx.absoluteValue == 2) dx / 2 else 0
+                        val legY = y + if (dy.absoluteValue == 2) dy / 2 else 0
+                        val nx = x + dx
+                        val ny = y + dy
+                        if (!inBoard(legX, legY) || board[legY][legX] != null) continue
+                        add(nx, ny)
+                    }
+                }
+
+                Piece.ROOK -> {
+                    for ((dx, dy) in arrayOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
+                        var nx = x + dx; var ny = y + dy
+                        while (inBoard(nx, ny)) {
+                            val t = board[ny][nx]
+                            if (t == null) { if (!river(ny)) list += nx to ny }
+                            else {
+                                if (t.red != redSide && !river(ny)) list += nx to ny
+                                break
+                            }
+                            nx += dx; ny += dy
+                        }
+                    }
+                }
+
+                Piece.CANNON -> {
+                    for ((dx, dy) in arrayOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
+                        var nx = x + dx; var ny = y + dy; var jumped = false
+                        while (inBoard(nx, ny)) {
+                            val t = board[ny][nx]
+                            if (!jumped) {
+                                if (t == null) { if (!river(ny)) list += nx to ny }
+                                else jumped = true
+                            } else {
+                                if (t != null) {
+                                    if (t.red != redSide && !river(ny)) list += nx to ny
+                                    break
+                                }
+                            }
+                            nx += dx; ny += dy
+                        }
+                    }
+                }
+
+                Piece.SOLDIER -> {
+                    val forward = if (redSide) -1 else 1
+                    val ny1 = y + forward
+                    if (river(ny1)) {
+                        val ny2 = ny1 + forward
+                        add(x, ny2)
+                    } else add(x, ny1)
+                    if ((redSide && y <= 4) || (!redSide && y >= 6)) {
+                        add(x + 1, y); add(x - 1, y)
+                    }
+                }
+            }
+            return list
+        }
+
+        companion object {
+            private fun initBoard(): Array<Array<Cell?>> {
+                fun put(b: Array<Array<Cell?>>, x: Int, y: Int, p: Piece, red: Boolean) { b[y][x] = Cell(p, red) }
+                val b = Array(ROWS) { arrayOfNulls<Cell?>(COLS) }
+                put(b, 0, 0, Piece.ROOK, false); put(b, 8, 0, Piece.ROOK, false)
+                put(b, 1, 0, Piece.HORSE, false); put(b, 7, 0, Piece.HORSE, false)
+                put(b, 2, 0, Piece.ELEPHANT, false); put(b, 6, 0, Piece.ELEPHANT, false)
+                put(b, 3, 0, Piece.ADVISOR, false); put(b, 5, 0, Piece.ADVISOR, false)
+                put(b, 4, 0, Piece.KING, false)
+                put(b, 1, 2, Piece.CANNON, false); put(b, 7, 2, Piece.CANNON, false)
+                for (x in 0 until COLS step 2) put(b, x, 3, Piece.SOLDIER, false)
+
+                put(b, 0, 10, Piece.ROOK, true); put(b, 8, 10, Piece.ROOK, true)
+                put(b, 1, 10, Piece.HORSE, true); put(b, 7, 10, Piece.HORSE, true)
+                put(b, 2, 10, Piece.ELEPHANT, true); put(b, 6, 10, Piece.ELEPHANT, true)
+                put(b, 3, 10, Piece.ADVISOR, true); put(b, 5, 10, Piece.ADVISOR, true)
+                put(b, 4, 10, Piece.KING, true)
+                put(b, 1, 8, Piece.CANNON, true); put(b, 7, 8, Piece.CANNON, true)
+                for (x in 0 until COLS step 2) put(b, x, 7, Piece.SOLDIER, true)
+                return b
+            }
+        }
+
+        override fun equals(other: Any?) = other is XqState && redTurn == other.redTurn &&
+                winner == other.winner && red == other.red && black == other.black &&
+                board.contentDeepEquals(other.board) && cursors == other.cursors && selected == other.selected
+
+        override fun hashCode() = arrayOf(redTurn, winner, red, black, board.contentDeepHashCode(), cursors, selected).contentHashCode()
+    }
+
+    private fun xKey(a: String, b: String) = if (a < b) a to b else b to a
+    private val xInvites = mutableMapOf<String, MutableList<XInvite>>()
+    private val xGames = mutableMapOf<Pair<String, String>, XqState>()
+    private val xLastInvite = mutableMapOf<String, Long>()
+    private const val X_COOLDOWN = 60_000L
+
+    private val xMenuId: Int = Menus.registerMenu { pl, choice ->
+        val p = pl ?: return@registerMenu
+        val key = xGames.keys.find { it.first == p.uuid() || it.second == p.uuid() } ?: run {
+            Call.hideFollowUpMenu(p.con, xMenuId); return@registerMenu
+        }
+        val st = xGames[key]!!
+        val cur = st.cursors.getOrPut(p.uuid()) { if (p.uuid() == st.red) XCursor(4, 10) else XCursor(4, 0) }
+        val isRed = p.uuid() == st.red
+        val myTurn = (isRed && st.redTurn) || (!isRed && !st.redTurn)
+
+        when (choice) {
+            1, 3, 5, 7 -> if (myTurn) {
+                when (choice) {
+                    1 -> cur.y = (cur.y - 1 + ROWS) % ROWS
+                    3 -> cur.x = (cur.x - 1 + COLS) % COLS
+                    5 -> cur.x = (cur.x + 1) % COLS
+                    7 -> cur.y = (cur.y + 1) % ROWS
+                }
+            }
+            9 -> if (myTurn && st.selectOrMove(p.uuid(), cur.x, cur.y)) {
+                val opp = if (p.uuid() == key.first) key.second else key.first
+                showBoardX(p, st)
+                Groups.player.find { it.uuid() == opp }?.let { showBoardX(it, st) }
+                st.winner?.let { winRed ->
+                    val oppPl = Groups.player.find { it.uuid() == opp }
+                    oppPl?.let { Call.announce(it.con, if ((isRed && winRed) || (!isRed && !winRed)) "你输了！" else "你赢了！") }
+                    xGames.remove(key)
+                }
+            }
+            10 -> {
+                showConfirmMenu(p) {
+                    st.winner = !isRed
+                    val opp = if (p.uuid() == key.first) key.second else key.first
+                    Groups.player.find { it.uuid() == opp }?.let { showBoardX(it, st) }
+                    xGames.remove(key)
+                    Call.hideFollowUpMenu(p.con, xMenuId)
+                }
+            }
+        }
+        showBoardX(p, st)
+    }
+
+    fun showXiangqiEntry(pl: Player) {
+        val uid = pl.uuid()
+        xGames.keys.find { it.first == uid || it.second == uid }?.let {
+            showBoardX(pl, xGames[it]!!)
+            return
+        }
+        val now = System.currentTimeMillis()
+        xInvites.values.forEach { it.removeIf { i -> now - i.time > 300_000 } }
+        val sent = xInvites.values.any { it.any { i -> i.from == uid } }
+        val rows = mutableListOf<MenuEntry>()
+        xInvites[uid].orEmpty().forEach { inv ->
+            val sender = Groups.player.find { it.uuid() == inv.from } ?: return@forEach
+            if (xGames.none { it.key.first == sender.uuid() || it.key.second == sender.uuid() }) {
+                rows += MenuEntry("${PluginVars.SECONDARY}${sender.name()}${PluginVars.RESET}") {
+                    showConfirmMenu(pl) {
+                        if (xGames.none { it.key.first == uid || it.key.second == uid || it.key.first == sender.uuid() || it.key.second == sender.uuid() })
+                            startXiangqi(sender.uuid(), uid)
+                        xInvites[uid]?.clear()
+                    }
+                }
+            }
+        }
+        Groups.player.filter { it.uuid() != uid && xGames.none { g -> g.key.first == it.uuid() || g.key.second == it.uuid() } }
+            .forEach { target ->
+                rows += MenuEntry("${PluginVars.WHITE}${target.name()}${PluginVars.RESET}") {
+                    val last = xLastInvite[uid] ?: 0
+                    val delta = now - last
+                    when {
+                        sent -> Call.announce(pl.con, I18nManager.get("gomoku.inv.already", pl))
+                        delta < X_COOLDOWN -> Call.announce(pl.con, "(${((X_COOLDOWN - delta) / 1000).toInt()}s)")
+                        else -> {
+                            showConfirmMenu(pl) {
+                                if (xGames.none { it.key.first == uid || it.key.second == uid || it.key.first == target.uuid() || it.key.second == target.uuid() }) {
+                                    val lst = xInvites.getOrPut(target.uuid()) { mutableListOf() }
+                                    if (lst.none { it.from == uid }) lst += XInvite(uid)
+                                    xLastInvite[uid] = now
+                                    Call.announce(pl.con, I18nManager.get("gomoku.inv.sent", pl))
+                                    createConfirmMenu(
+                                        title = { "中国象棋邀请" },
+                                        desc = { "${pl.name()} 邀请你下中国象棋" },
+                                        onResult = { tgt, ch ->
+                                            if (ch == 0 && xGames.none { it.key.first == uid || it.key.second == uid || it.key.first == tgt.uuid() || it.key.second == tgt.uuid() })
+                                                startXiangqi(uid, tgt.uuid())
+                                        }
+                                    )(target)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "中国象棋 - 选择对手" },
+            desc = { _, _, _ -> "" },
+            paged = false,
+            options = { _, _, _ -> rows }
+        )(pl, 1)
+    }
+
+    private fun startXiangqi(a: String, b: String) {
+        if (xGames.any { it.key.first == a || it.key.second == a || it.key.first == b || it.key.second == b }) return
+        val k = xKey(a, b)
+        xGames[k] = XqState(red = b, black = a)
+        xInvites.remove(a); xInvites.remove(b)
+        xInvites.values.forEach { it.removeIf { i -> i.from == a || i.from == b } }
+        val st = xGames[k]!!
+        Groups.player.find { it.uuid() == a }?.let { showBoardX(it, st) }
+        Groups.player.find { it.uuid() == b }?.let { showBoardX(it, st) }
+    }
+
+    private fun showBoardX(pl: Player, st: XqState) {
+        val cur = st.cursors.getOrPut(pl.uuid()) { XCursor() }
+        val isRed = pl.uuid() == st.red
+        val myTurn = (isRed && st.redTurn) || (!isRed && !st.redTurn)
+        val sel = st.selected
+        val legal = if (sel != null) {
+            val (sx, sy) = sel
+            if (sx in 0 until COLS && sy in 0 until ROWS) {
+                val c = st.board[sy][sx]
+                if (c != null && c.red == isRed) st.legalMoves(sx, sy, c) else emptyList()
+            } else emptyList()
+        } else emptyList()
+        val sb = StringBuilder()
+        for (y in 0 until ROWS) {
+            for (x in 0 until COLS) {
+                val pos = x to y
+                val cell = st.board[y][x]
+                val base = when {
+                    cell != null -> glyph(cell.piece.id)
+                    river(y) -> ""
+                    else -> glyph(0)
+                }
+                val txt = when {
+                    pos == cur.x to cur.y && pos == sel -> "${PluginVars.SECONDARY}$base${PluginVars.RESET}"
+                    pos == cur.x to cur.y && pos in legal -> "${PluginVars.SECONDARY}$base${PluginVars.RESET}"
+                    pos == cur.x to cur.y -> "${PluginVars.GOLD}$base${PluginVars.RESET}"
+                    pos == sel -> "${PluginVars.WARN}$base${PluginVars.RESET}"
+                    pos in legal -> "${PluginVars.SECONDARY}$base${PluginVars.RESET}"
+                    cell != null && cell.red -> "${PluginVars.GREEN}$base${PluginVars.RESET}"
+                    cell != null -> "${PluginVars.BLUE}$base${PluginVars.RESET}"
+                    river(y) -> "${PluginVars.GRAY}$base${PluginVars.RESET}"
+                    else -> base
+                }
+                sb.append(txt)
+            }
+            sb.append('\n')
+        }
+        fun b(t: String, en: Boolean) = if (en) "${PluginVars.SECONDARY}$t${PluginVars.RESET}" else t
+        val btns = arrayOf(
+            arrayOf("", b("\uE804", myTurn), ""),
+            arrayOf(b("\uE802", myTurn), "", b("\uE803", myTurn)),
+            arrayOf("", b("\uE805", myTurn), ""),
+            arrayOf(b("选择", myTurn)),
+            arrayOf(b("投降", true))
+        )
+        val info = when {
+            st.winner == null && myTurn -> "轮到你"
+            st.winner == null -> "等待对手"
+            st.winner == isRed -> "你赢了！"
+            else -> "你输了！"
+        }
+        Call.followUpMenu(pl.con, xMenuId, "中国象棋", "\n$info\n\n$sb", btns)
+    }
 
     private enum class Stone(val glyph: String){ EMPTY("\uF8F7"), BLACK("\uF7C9"), WHITE("\uF8A6") }
     private data class Cursor(var x: Int = 10, var y: Int = 10)
@@ -729,12 +1110,11 @@ object PluginMenus {
             val ts = System.currentTimeMillis()
             val file = snapshotFolder.child("$ts.msav")
             if (!isCoreAdmin(player.uuid())) {
-                if (VoteManager.globalVoteSession != null) {
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
-                    return@MenuEntry
-                }
-
                 showConfirmMenu(player) {
+                    if (VoteManager.globalVoteSession != null) {
+                        Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                        return@showConfirmMenu
+                    }
                     VoteManager.createGlobalVote(creator = player) { ok ->
                         if (ok && Vars.state.isGame) {
                             SaveIO.save(file)
@@ -791,7 +1171,7 @@ object PluginMenus {
 
     fun showSnapshotOptionsMenu(player: Player, file: arc.files.Fi, mapName: String, index: Int) {
         val isAdmin = isCoreAdmin(player.uuid())
-        val normalCount = Groups.player.count { isNormal(it.uuid()) }
+        val normalCount = Groups.player.count { !isBanned(it.uuid()) }
         val strong = PluginVars.INFO
         val weak = PluginVars.SECONDARY
 
@@ -807,12 +1187,13 @@ object PluginMenus {
                     Call.announce(player.con, "${PluginVars.SUCCESS}${I18nManager.get("noPoints", player)}${PluginVars.RESET}")
                     return@MenuEntry
                 }
-                if (VoteManager.globalVoteSession != null) {
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
-                    return@MenuEntry
-                }
+
 
                 showConfirmMenu(player) {
+                    if (VoteManager.globalVoteSession != null) {
+                        Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                        return@showConfirmMenu
+                    }
                     VoteManager.createGlobalVote(creator = player) { ok ->
                         if (ok && Vars.state.isGame) loadSnapshot(file)
                     }
@@ -1128,7 +1509,7 @@ object PluginMenus {
             title = { _, _, _, _ ->
                 "${PluginVars.GRAY}${I18nManager.get("gameover.title", player)}${PluginVars.RESET}"
             },
-            desc  = { _, _, _ -> "" },
+            desc  = { _, _, _ -> "\n${PluginVars.GRAY}${I18nManager.get("gameover.desc", player)}${PluginVars.RESET}\n" },
             paged = false,
             options = { _, _, _ -> rows }
         )(player, 1)
@@ -1145,6 +1526,7 @@ object PluginMenus {
                     .sortedBy { it.text }
                     .filter { it.text != "help" }
                     .filter { it.text != "t" }
+                    .filter { it.text != "ban" }
                     .filter { it.text != "votekick" }
                     .filter { it.text != "over" || player.admin }
                     .filter { it.text != "rules" || player.admin }
@@ -1161,6 +1543,42 @@ object PluginMenus {
 
         show(player, page)
     }
+
+    fun showMessageMenu(player: Player, page: Int = 1) {
+        val allMessages = RecordMessage.getAll().lines().asReversed()
+
+        val menu = MenusManage.createMenu<Unit>(
+            title = { p, currentPage, totalPages, _ ->
+                "${PluginVars.GRAY}${I18nManager.get("messages.title", p)} $currentPage/$totalPages${PluginVars.RESET}"
+            },
+            perPage = 50,
+            paged = true,
+            desc = { _, _, _ -> "" },
+            options = { p, _, _ ->
+                if (allMessages.isEmpty()) {
+                    listOf(
+                        MenuEntry("${PluginVars.INFO}${I18nManager.get("messages.empty", p)}${PluginVars.RESET}") {}
+                    )
+                } else {
+                    allMessages.map { msg ->
+                        MenuEntry("${PluginVars.INFO}$msg${PluginVars.RESET}") { viewer ->
+                            MenusManage.createTextInput(
+                                title = I18nManager.get("messages.title", viewer),
+                                desc = "",
+                                isNum = false,
+                                placeholder = msg
+                            ) { sender, input ->
+                                return@createTextInput
+                            }(viewer)
+                        }
+                    }
+                }
+            }
+        )
+
+        menu(player, page)
+    }
+
 
     fun showRankMenu(player: Player) {
         val rankMenu = MenusManage.createMenu<Unit>(
@@ -1211,7 +1629,7 @@ object PluginMenus {
     fun showLogoutMenu(player: Player) {
         val uuid = player.uuid()
         val acc = DataManager.getPlayerDataByUuid(uuid)
-        val team = PlayerTeamManager.getTeam(uuid)
+        val team = PlayerTeam.getTeam(uuid)
 
         if (acc == null) {
             Call.announce(
@@ -1289,7 +1707,7 @@ object PluginMenus {
         val weak = PluginVars.SECONDARY
 
         val desc = buildString {
-            append("\n${PluginVars.WHITE}${acc.account}${PluginVars.RESET}\n\n")
+            append("\n${PluginVars.WHITE}${acc.account}\n\uF029${acc.id}${PluginVars.RESET}\n\n")
             append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.score", viewer)}: ${acc.score}${PluginVars.RESET}\n")
             append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.wins", viewer)}: ${acc.wins}${PluginVars.RESET}\n")
             append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.lang", viewer)}: ${acc.lang}${PluginVars.RESET}\n")
@@ -1325,11 +1743,12 @@ object PluginMenus {
                 )
                 return@MenuEntry
             }
-            if (VoteManager.globalVoteSession != null) {
-                Call.announce(viewer.con, "${PluginVars.WARN}${I18nManager.get("vote.running", viewer)}${PluginVars.RESET}")
-                return@MenuEntry
-            }
+
             showConfirmMenu(viewer) {
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(viewer.con, "${PluginVars.WARN}${I18nManager.get("vote.running", viewer)}${PluginVars.RESET}")
+                    return@showConfirmMenu
+                }
                 beginVotekick(viewer, target)
             }
         }
@@ -1361,7 +1780,9 @@ object PluginMenus {
                 DataManager.updatePlayer(acc.id) {
                     it.banUntil = if (seconds == 0L) 0 else System.currentTimeMillis() + seconds * 1000
                 }
-                viewer.kick("")
+                target.kick("")
+                restorePlayerEditsWithinSeconds(target.uuid(), 200)
+                UnitEffects.clear(target.uuid())
                 Call.announce(
                     viewer.con,
                     "${PluginVars.SUCCESS}${I18nManager.get("playerInfo.setban.success", viewer)}${PluginVars.RESET}"
@@ -1500,7 +1921,7 @@ object PluginMenus {
 
     fun showMapOptionMenu(player: Player, map: mindustry.maps.Map) {
         val isAdmin = isCoreAdmin(player.uuid())
-        val normalCount = Groups.player.count { isNormal(it.uuid()) }
+        val normalCount = Groups.player.count { !isBanned(it.uuid()) }
         val fileName = map.file.name()
         val mapMode = DataManager.maps[fileName]?.modeName
             ?.lowercase()
@@ -1547,12 +1968,12 @@ object PluginMenus {
                     Call.announce(player.con, "${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
                     return@MenuEntry
                 }
-                if (VoteManager.globalVoteSession != null) {
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
-                    return@MenuEntry
-                }
 
                 showConfirmMenu(player) {
+                    if (VoteManager.globalVoteSession != null) {
+                        Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                        return@showConfirmMenu
+                    }
                     VoteManager.createGlobalVote(creator = player) { ok ->
                         if (ok && Vars.state.isGame) {
                             reloadWorld(map)
@@ -1886,7 +2307,6 @@ object PluginMenus {
 
     private val tempTeamChoices = mutableMapOf<String, MutableList<Team>>()
     fun showTeamMenu(player: Player) {
-        if (player.team() != Team.derelict || isBanned(player.uuid())) return
         val teamsWithCore = Team.all.filter { t -> t.data().hasCore() && t != Team.derelict }.toMutableList()
 
         if (teamsWithCore.isEmpty()) {
@@ -1952,7 +2372,7 @@ object PluginMenus {
     private fun onMenuChoose(player: Player, choice: Int) {
         if (choice < 0) return
         val currentTeam = player.team()
-        if (currentTeam != Team.derelict && currentTeam.data().hasCore()) return
+        if (currentTeam.data().hasCore()) return
 
         val teams = tempTeamChoices[player.uuid()]?.toList()?.toMutableList()
         if (teams.isNullOrEmpty()) return
@@ -1983,7 +2403,7 @@ object PluginMenus {
 
         Call.hideFollowUpMenu(player.con, teamMenuId)
         player.team(target)
-        PlayerTeamManager.setTeam(player, target)
+        PlayerTeam.setTeam(player, target)
         Call.announce(
             player.con,
             "${PluginVars.INFO}${I18nManager.get("team.joined", player)} ${target.coloredName()}${PluginVars.RESET}"
@@ -2022,7 +2442,6 @@ object PluginMenus {
                 lang = player.locale()
             )
             if (Vars.state.rules.pvp) {
-                player.team(Team.derelict)
                 showTeamMenu(player)
             } else {
                 player.team(Vars.state.rules.defaultTeam)
@@ -2073,7 +2492,6 @@ object PluginMenus {
             account.uuids.add(p.uuid())
             DataManager.requestSave()
             if (Vars.state.rules.pvp) {
-                p.team(Team.derelict)
                 showTeamMenu(p)
             } else {
                 p.team(Vars.state.rules.defaultTeam)
@@ -2146,8 +2564,7 @@ object PluginMenus {
             })
 
         revertPlayers.forEach { uuid ->
-            val acc = DataManager.getPlayerDataByUuid(uuid)
-            val name = acc?.account ?: uuid.take(8)
+            val name = Vars.netServer.admins.getInfo(uuid).lastName
 
             btns.add(MenuEntry("${PluginVars.WHITE}$name${PluginVars.RESET}") {
                 MenusManage.createTextInput(
@@ -2230,6 +2647,31 @@ object PluginMenus {
         )
     }
 
+    val aboutMenuId: Int = Menus.registerMenu { p, choice ->
+        if (p == null) return@registerMenu
+        when (choice) {
+            0 -> Call.hideFollowUpMenu(p.con, uploadMapMenuId)
+            1 -> {
+                val url = "https://github.com/ankando/snow"
+                Call.openURI(p.con, url)
+            }
+        }
+    }
+
+    fun showAboutMenu(player: Player) {
+        val closeLabel = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
+        val openLabel = "${PluginVars.INFO}${I18nManager.get("open", player)}${PluginVars.RESET}"
+        val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel))
+
+        Call.menu(
+            player.con,
+            aboutMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("about", player)}${PluginVars.RESET}",
+            "\n${PluginVars.WARN}${I18nManager.get("aboutDesc", player)}${PluginVars.RESET}\n",
+            buttons
+        )
+    }
+
     fun showVoteKickPlayerMenu(player: Player) {
         val kickablePlayers = Groups.player.filter {
             it != player && !isCoreAdmin(it.uuid()) && it.con != null
@@ -2243,11 +2685,11 @@ object PluginMenus {
         }
         val rows = kickablePlayers.map { target ->
             MenuEntry("${PluginVars.WHITE}${target.name()}${PluginVars.RESET}") {
-                if (VoteManager.globalVoteSession != null) {
-                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
-                    return@MenuEntry
-                }
                 showConfirmMenu(player) {
+                    if (VoteManager.globalVoteSession != null) {
+                        Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                        return@showConfirmMenu
+                    }
                     beginVotekick(player, target)
                 }
             }
@@ -2326,6 +2768,8 @@ object PluginMenus {
 
         val i18nShowHistory = I18nManager.get("others.showHistory", player)
         val i18nShowIcons = I18nManager.get("icons.title", player)
+        val i18nEffect = I18nManager.get("others.selectEffect", player)
+        val i18nHud = I18nManager.get("showHud.title", player)
 
         val historyModeState = if (current) "true" else "false"
 
@@ -2338,9 +2782,19 @@ object PluginMenus {
             showIconMenu(player)
         }
 
+        val effectMenuBtn = MenuEntry("${strong}$i18nEffect${PluginVars.RESET}") {
+            showEffectMenu(player)
+        }
+
+        val hudMenuBtn = MenuEntry("${strong}$i18nHud${PluginVars.RESET}") {
+            showHudTextMenu(player)
+        }
+
         val rows = listOf(
             toggleHistoryBtn,
-            showIconsBtn
+            showIconsBtn,
+            effectMenuBtn,
+            hudMenuBtn
         )
         MenusManage.createMenu<Unit>(
             title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("others.title", player)}${PluginVars.RESET}" },
@@ -2363,10 +2817,11 @@ object PluginMenus {
                 try { (it.get(null) as Char).toString() }
                 catch (_: Exception) { null }
             }
-
         val buildingIcons = Vars.content.blocks().map { GetIcon.getBuildingIcon(it) }
-        val unitIcons     = Vars.content.units().map { GetIcon.getUnitIcon(it) }
-        val icons = allIcons + buildingIcons + unitIcons
+        val unitIcons = Vars.content.units().map { GetIcon.getUnitIcon(it) }
+
+        val uniqueIcons = allIcons.toSet() - buildingIcons.toSet() - unitIcons.toSet()
+        val icons = (uniqueIcons + buildingIcons + unitIcons).toList()
 
         val idx = choice - 1
         if (idx in icons.indices) {
@@ -2383,6 +2838,7 @@ object PluginMenus {
         }
     }
 
+
     fun showIconMenu(player: Player) {
         val allIcons = Iconc::class.java.fields
             .filter { Modifier.isStatic(it.modifiers) && it.type == Char::class.javaPrimitiveType }
@@ -2392,12 +2848,13 @@ object PluginMenus {
             }
 
         val buildingIcons = Vars.content.blocks().map { GetIcon.getBuildingIcon(it) }
-        val unitIcons     = Vars.content.units().map { GetIcon.getUnitIcon(it) }
-        val icons = allIcons + buildingIcons + unitIcons
+        val unitIcons = Vars.content.units().map { GetIcon.getUnitIcon(it) }
 
+        val uniqueIcons = allIcons.toSet() - buildingIcons.toSet() - unitIcons.toSet()
+        val filteredIcons =  uniqueIcons + buildingIcons + unitIcons
         val rows = mutableListOf<Array<String>>()
         rows += arrayOf("${PluginVars.GRAY}\u2716${PluginVars.RESET}")
-        icons.chunked(5).forEach { chunk ->
+        filteredIcons.chunked(5).forEach { chunk ->
             rows += chunk.map { "${PluginVars.WHITE}$it${PluginVars.RESET}" }.toTypedArray()
         }
 
@@ -2409,4 +2866,78 @@ object PluginMenus {
             rows.toTypedArray()
         )
     }
+
+    fun showHudTextMenu(player: Player) {
+        val strong = PluginVars.WHITE
+
+        val clearBtn = MenuEntry("${strong}${I18nManager.get("showHud.hide", player)}${PluginVars.RESET}") {
+            HudTextController.setMode(player, null)
+            Call.announce(player.con, I18nManager.get("ok", player))
+        }
+
+        val modeButtons = HudTextController.availableModes().map { mode ->
+            MenuEntry("${strong}${mode.displayName}${PluginVars.RESET}") {
+                HudTextController.setMode(player, mode)
+                Call.announce(player.con, "${PluginVars.SUCCESS}\uE87C ${mode.displayName}")
+            }
+        }
+
+        val rows = listOf(clearBtn) + modeButtons
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("showHud.title", player)}${PluginVars.RESET}" },
+            paged = false,
+            desc = { _, _, _ -> "" },
+            options = { _, _, _ -> rows }
+        )(player, 1)
+    }
+    private val effectMenuId: Int = Menus.registerMenu { p, choice ->
+        val player = p ?: return@registerMenu
+        val effects = UnitEffects.allEffects()
+
+        when (choice) {
+            0 -> {
+                Call.hideFollowUpMenu(player.con, effectMenuId)
+            }
+            1 -> {
+                UnitEffects.clear(player.uuid())
+                Call.announce(player.con, "${PluginVars.INFO}\uE87C ${I18nManager.get("common.false", player)}${PluginVars.RESET}")
+            }
+            in 2 until (2 + effects.size) -> {
+                val selected = effects[choice - 2].second
+                UnitEffects.setEffect(player, selected)
+                Call.announce(player.con, "${PluginVars.WHITE}\uE809 ${effects[choice - 2].first}${PluginVars.RESET}")
+            }
+        }
+    }
+
+    fun showEffectMenu(player: Player) {
+        val point = DataManager.getPlayerDataByUuid(player.uuid())?.score
+        if (!isCoreAdmin(player.uuid()) && (point == null || point < 100)) {
+            Call.announce(player.con(), I18nManager.get("noPoints", player))
+            return
+        }
+
+        val effects = UnitEffects.allEffects()
+        val rows = mutableListOf<Array<String>>()
+
+        rows += arrayOf("${PluginVars.GRAY}\u2716${PluginVars.RESET}")
+
+        rows += arrayOf("${PluginVars.WHITE}\uE87C ${I18nManager.get("showHud.hide", player)}${PluginVars.RESET}")
+
+        effects.map { it.first }
+            .chunked(5)
+            .forEach { chunk ->
+                rows += chunk.map { "${PluginVars.WHITE}$it${PluginVars.RESET}" }.toTypedArray()
+            }
+
+        Call.followUpMenu(
+            player.con,
+            effectMenuId,
+            "${PluginVars.GRAY}${I18nManager.get("others.selectEffect", player)}${PluginVars.RESET}",
+            "",
+            rows.toTypedArray()
+        )
+    }
+
 }

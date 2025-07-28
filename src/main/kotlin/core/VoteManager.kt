@@ -6,7 +6,6 @@ import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
 import plugin.core.PermissionManager.isBanned
-import plugin.core.PermissionManager.isNormal
 import plugin.snow.PluginVars
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -78,7 +77,7 @@ object VoteManager{
 
     private fun buildVoterSet(creator: Player, exclude: Set<String>) =
         Groups.player.asSequence()
-            .filter { isNormal(it.uuid()) && it.uuid() != creator.uuid() && it.uuid() !in exclude }
+            .filter { !isBanned(it.uuid()) && it.uuid() != creator.uuid() && it.uuid() !in exclude }
             .map   { it.uuid() }
             .toMutableSet()
 

@@ -17,7 +17,8 @@ object PluginVars {
     const val SUCCESS = "[#BEBEBEDD]"
     const val WARN = "[#C8C8C8DD]"
     const val RESET = "[]"
-
+    const val GREEN = "[#D5F7D5DD]"
+    const val BLUE  = "[#D5EFF7DD]"
     const val ICON_LEFT = "\uE802"
     const val ICON_OK = "\uE800"
     const val ICON_CLOSE = "\uE815"

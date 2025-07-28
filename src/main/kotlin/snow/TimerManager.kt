@@ -1,11 +1,13 @@
 package plugin.snow
 
+import arc.graphics.Color
 import arc.util.Timer
 import mindustry.Vars
-import mindustry.game.Team
+import mindustry.gen.Call
 import mindustry.gen.Groups
 import plugin.core.DataManager
-import plugin.core.PermissionManager.isBanned
+import plugin.core.HudTextController
+import plugin.core.UnitEffects
 import plugin.core.VoteManager
 
 object TimerManager {
@@ -21,9 +23,11 @@ object TimerManager {
             DataManager.saveAll()
         }
         Groups.player.each { player ->
-            if ((isBanned(player.uuid()) || player.team() == Team.derelict) && player.unit() != null) {
-                player.clearUnit()
+            val effect = UnitEffects.getEffect(player)
+            if (effect != null) {
+                Call.effect(effect, player.x, player.y, 0f, Color.white)
             }
         }
+        HudTextController.updateAllHudText()
     }
 }

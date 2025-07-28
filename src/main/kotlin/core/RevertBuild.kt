@@ -16,7 +16,7 @@ import plugin.snow.PluginVars
 
 object RevertBuild {
     object RevertState {
-        val historyMode = ObjectMap<String, Boolean>()  // UUID -> showHistory
+        val historyMode = ObjectMap<String, Boolean>()
 
         fun getHistoryMode(uuid: String): Boolean {
             return historyMode.get(uuid, false)
@@ -27,7 +27,7 @@ object RevertBuild {
         }
     }
 
-    private const val RECORD_WINDOW_SEC = 300
+    private const val RECORD_WINDOW_SEC = 1000
 
     private data class BlockEdit(
         val block: Block,
@@ -70,48 +70,40 @@ object RevertBuild {
     fun restoreAllPlayersEditsWithinSeconds(seconds: Int) = restoreEdits(getAllPlayersWithEdits(), seconds)
     fun clearAll() = lastEdits.clear()
 
-    fun showHistory(caller: Player?, x: Short, y: Short, size: Int = 100) {
+    fun showHistory(caller: Player?, x: Short, y: Short) {
         val nowNanos = System.nanoTime()
         val cutoffNanos = RECORD_WINDOW_SEC * 1_000_000_000L
         val sb = StringBuilder()
-            .append("${PluginVars.WHITE}${PluginVars.SECONDARY}($x,$y)${PluginVars.RESET}")
-
-        var count = 0
         for (uuid in lastEdits.keys()) {
-            val edits = lastEdits.get(uuid) ?: continue
-            val entryIter = edits.entries()
-            while (entryIter.hasNext() && count < size) {
-                val entry = entryIter.next()
-                val pos: Point2 = entry.key
-                if (pos.x.toShort() != x || pos.y.toShort() != y) continue
-                val edit: BlockEdit = entry.value
+            val edits = lastEdits[uuid] ?: continue
+            for (entry in edits) {
+                val pos = entry.key
+                if (kotlin.math.abs(pos.x - x) > 1 || kotlin.math.abs(pos.y - y) > 1) continue
+                val edit = entry.value
                 if (nowNanos - edit.timeNanos > cutoffNanos) continue
 
-                count += 1
-                val name = Vars.netServer.admins
-                    .getInfoOptional(uuid)
-                    ?.lastName ?: "unknown"
+                val name = Vars.netServer.admins.getInfoOptional(uuid)?.lastName ?: "unknown"
                 val icon = GetIcon.getBuildingIcon(edit.block)
                 val deltaSec = ((nowNanos - edit.timeNanos) / 1_000_000_000L).toString()
-                val action = if (edit.destroy) I18nManager.get("revertbuild.removed", caller) else I18nManager.get("revertbuild.built", caller)
+                val action = if (edit.destroy)
+                    I18nManager.get("revertbuild.removed", caller)
+                else
+                    I18nManager.get("revertbuild.built", caller)
 
-                sb.append(" ")
+                sb.append("${PluginVars.WHITE}(${pos.x},${pos.y})${PluginVars.RESET} ")
                     .append(name)
                     .append(" ")
                     .append("${PluginVars.SECONDARY}${deltaSec}s${PluginVars.RESET} ")
                     .append(action)
                     .append(" ")
                     .append(icon)
+                    .append("\n")
             }
         }
-
-        val message = sb.toString()
-        if (caller == null) {
-            Log.info(message)
-        } else {
-            caller.sendMessage(message)
-        }
+        val message = if (sb.isEmpty()) I18nManager.get("revertbuild.none", caller) else sb.toString().trimEnd()
+        if (caller == null) Log.info(message) else caller.sendMessage(message)
     }
+
 
     private fun recordBuildInternal(player: Player, tile: Tile) {
         val build = tile.build ?: return
@@ -142,7 +134,7 @@ object RevertBuild {
                     if (now - edit.timeNanos > cutoff) continue
                     Vars.world.tile(pos.x, pos.y)?.let { tile ->
                         if (edit.destroy && edit.block.canBeBuilt()) Call.setTile(tile, edit.block, Team.get(edit.teamId), edit.rotation)
-                        else Call.setTile(tile, Blocks.air, Team.derelict, 0)
+                       /* else Call.setTile(tile, Blocks.air, Team.derelict, 0) */
                         toDel.add(Point2(pos))
                     }
                 }

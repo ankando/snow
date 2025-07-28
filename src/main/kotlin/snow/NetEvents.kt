@@ -17,6 +17,7 @@ import mindustry.net.Packets.AdminAction
 import mindustry.net.Packets.KickReason
 import plugin.core.DataManager
 import plugin.core.PermissionManager.isBanned
+import plugin.core.RecordMessage
 import plugin.core.RevertBuild
 import plugin.core.Translator
 import plugin.core.VoteManager
@@ -48,7 +49,7 @@ object NetEvents {
         val prefix = buildChatPrefix(sender)
         val localMsg = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
         sender.sendMessage(localMsg)
-
+        RecordMessage.add(localMsg)
         val rawLangGroups = groupPlayersByLang(sender)
 
         rawLangGroups.forEach { (lang, players) ->

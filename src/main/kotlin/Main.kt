@@ -104,19 +104,31 @@ class Main : Plugin() {
 
     private fun assignTeam(player: Player?): Team = when {
         player == null -> Vars.state.rules.defaultTeam
+
         PermissionManager.isBanned(player.uuid()) -> {
             val candidates = Team.all.filter { team ->
                 team != Team.derelict && team.cores().isEmpty
             }
-            if (candidates.isNotEmpty()) {
-                candidates.random()
+            val team = candidates.randomOrNull() ?: Team.derelict
+            PlayerTeam.markAutoAssigned(player.uuid())
+            team
+        }
+
+        !Vars.state.rules.pvp -> Vars.state.rules.defaultTeam
+
+        else -> {
+            val existing = PlayerTeam.getTeam(player.uuid())
+            if (existing != null) {
+                existing
             } else {
-                Team.derelict
+                val candidates = Team.all.filter { it != Team.derelict && !it.data().hasCore()}
+                val assigned = candidates.randomOrNull() ?: Team.derelict
+                PlayerTeam.markAutoAssigned(player.uuid())
+                assigned
             }
         }
-        !Vars.state.rules.pvp -> Vars.state.rules.defaultTeam
-        else -> PlayerTeamManager.getTeam(player.uuid()) ?: Team.derelict
     }
+
 
     private val invalidCommandHandler = NetServer.InvalidCommandHandler { player, res ->
         val key = when (res.type) {
