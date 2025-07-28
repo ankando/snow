@@ -1,6 +1,7 @@
 package plugin.snow
 
 import arc.Events
+import arc.util.Strings
 import mindustry.Vars
 import mindustry.game.EventType.*
 import mindustry.game.Gamemode
@@ -36,8 +37,8 @@ object EventManager {
             if (isCoreAdmin(player.uuid())) {
                 player.admin = true
             }
-            RecordMessage.add("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("joined", player)}${PluginVars.RESET}")
-            Groups.player.each { p ->  p.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("joined", p)}${PluginVars.RESET}")}
+            RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("joined", player)}")
+            Groups.player.each { p ->  p.sendMessage("${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${PluginVars.INFO}${Strings.stripColors(player.name)}${PluginVars.RESET} ${PluginVars.SECONDARY}${I18nManager.get("joined", p)}${PluginVars.RESET}")}
         }
 
 
@@ -68,8 +69,8 @@ object EventManager {
             }
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
             if (pData != null) {
-                RecordMessage.add("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("left", player)}${PluginVars.RESET}")
-                Groups.player.each { p ->  p.sendMessage("${PluginVars.SECONDARY}${PluginVars.GRAY}${pData.id} ${player.name}${PluginVars.RESET} ${I18nManager.get("left", p)}${PluginVars.RESET}")}
+                RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("left", player)}")
+                Groups.player.each { p ->  p.sendMessage("${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${PluginVars.INFO}${Strings.stripColors(player.name)}${PluginVars.RESET} ${PluginVars.SECONDARY}${I18nManager.get("left", p)}${PluginVars.RESET}")}
             }
         }
 
