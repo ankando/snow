@@ -2886,7 +2886,7 @@ object PluginMenus {
     fun showHudTextMenu(player: Player) {
         val strong = PluginVars.WHITE
 
-        val clearBtn = MenuEntry("${strong}${I18nManager.get("showHud.hide", player)}${PluginVars.RESET}") {
+        val clearBtn = MenuEntry("${strong}\uE87C ${I18nManager.get("showHud.hide", player)}${PluginVars.RESET}") {
             HudTextController.setMode(player, null)
             Call.announce(player.con, I18nManager.get("ok", player))
         }
