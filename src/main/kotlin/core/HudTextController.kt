@@ -13,11 +13,11 @@ enum class Mode(val displayName: String, val generator: (Player) -> String) {
             val totalSeconds = Vars.state.tick / 60
             val minutes = totalSeconds / 60
             val seconds = totalSeconds % 60
-            return "${PluginVars.INFO}%02d:%02d${PluginVars.RESET}".format(minutes.toInt(), seconds.toInt())
+            return "${PluginVars.WHITE}%02d:%02d${PluginVars.RESET}".format(minutes.toInt(), seconds.toInt())
         }),
 
         COORDS("Location", fun(player): String {
-            return "${PluginVars.INFO}(${player.tileX()}, ${player.tileY()})${PluginVars.RESET}"
+            return "${PluginVars.WHITE}(${player.tileX()}, ${player.tileY()})${PluginVars.RESET}"
         });
     }
 

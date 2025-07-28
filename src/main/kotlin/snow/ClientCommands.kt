@@ -147,6 +147,7 @@ object ClientCommands {
             if (!player.isLocal) {
                 if (Time.timeSinceMillis(player.info.lastSyncTime) < 1000 * 5) {
                     return@register
+
                 }
                 player.info.lastSyncTime = Time.millis()
                 Call.worldDataBegin(player.con)
