@@ -315,6 +315,12 @@ object PluginMenus {
                 }
                 return@registerMenu
             }
+
+            11 -> {
+                Call.hideFollowUpMenu(p.con, xMenuId)
+                return@registerMenu
+            }
+
         }
 
             showBoardX(p, st)
@@ -434,7 +440,8 @@ object PluginMenus {
             arrayOf(b("\uE802", myTurn), "", b("\uE803", myTurn)),
             arrayOf("", b("\uE805", myTurn), ""),
             arrayOf(b("选择", myTurn)),
-            arrayOf(b("投降", true))
+            arrayOf(b("投降", true)),
+            arrayOf(b("退出", true))
         )
         val info = when {
             st.winner == null && myTurn -> "轮到你"
