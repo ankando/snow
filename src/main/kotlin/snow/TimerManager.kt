@@ -27,7 +27,8 @@ object TimerManager {
             if (effect != null) {
                 Call.effect(effect, player.x, player.y, 0f, Color.white)
             }
+            HudTextController.updateAllHudText(player)
         }
-        HudTextController.updateAllHudText()
+
     }
 }

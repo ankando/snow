@@ -35,12 +35,10 @@ enum class Mode(val displayName: String, val generator: (Player) -> String) {
 
     fun getMode(player: Player): Mode? = activeModes[player.uuid()]
 
-    fun updateAllHudText() {
-        Groups.player.each { player ->
-            val mode = getMode(player) ?: return@each
+    fun updateAllHudText(player: Player) {
+            val mode = getMode(player) ?: return
             val text = mode.generator(player)
             Call.setHudText(player.con, text)
-        }
     }
 
     fun availableModes(): List<Mode> = Mode.entries.toList()
