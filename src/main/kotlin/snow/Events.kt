@@ -27,6 +27,7 @@ object EventManager {
     )
     private var currentRotationMode: Gamemode? = null
     fun init() {
+
         Events.on(PlayerJoin::class.java) { e ->
             val player = e.player
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
@@ -38,7 +39,7 @@ object EventManager {
                 player.admin = true
             }
             RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} joined")
-            Groups.player.each { p ->  if (!RecordMessage.isDisabled(p.uuid())) { p.sendMessage("${PluginVars.SECONDARY}${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("joined", p)}")}}
+            Groups.player.each { p ->  if (!RecordMessage.isDisabled(p.uuid())) { p.sendMessage("${PluginVars.WARN}${Strings.stripColors(player.name)} #${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${I18nManager.get("joined", p)}")}}
         }
 
 
@@ -69,7 +70,7 @@ object EventManager {
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
             if (pData != null) {
                 RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} left")
-                Groups.player.each { p -> if (!RecordMessage.isDisabled(p.uuid())) {p.sendMessage("${PluginVars.SECONDARY}${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("left", p)}")}}
+                Groups.player.each { p ->  if (!RecordMessage.isDisabled(p.uuid())) { p.sendMessage("${PluginVars.WARN}${Strings.stripColors(player.name)} #${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${I18nManager.get("left", p)}")}}
             }
         }
 
