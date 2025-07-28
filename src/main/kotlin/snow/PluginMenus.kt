@@ -291,7 +291,9 @@ object PluginMenus {
                     5 -> cur.x = (cur.x + 1) % COLS
                     7 -> cur.y = (cur.y + 1) % ROWS
                 }
+                showBoardX(p, st)
             }
+
             9 -> if (myTurn && st.selectOrMove(p.uuid(), cur.x, cur.y)) {
                 val opp = if (p.uuid() == key.first) key.second else key.first
                 showBoardX(p, st)
@@ -302,6 +304,7 @@ object PluginMenus {
                     xGames.remove(key)
                 }
             }
+
             10 -> {
                 showConfirmMenu(p) {
                     st.winner = !isRed
@@ -310,10 +313,13 @@ object PluginMenus {
                     xGames.remove(key)
                     Call.hideFollowUpMenu(p.con, xMenuId)
                 }
+                return@registerMenu
             }
         }
-        showBoardX(p, st)
+
+            showBoardX(p, st)
     }
+
 
     fun showXiangqiEntry(pl: Player) {
         val uid = pl.uuid()
@@ -410,10 +416,10 @@ object PluginMenus {
                 val txt = when {
                     pos == cur.x to cur.y && pos == sel -> "${PluginVars.SECONDARY}$base${PluginVars.RESET}"
                     pos == cur.x to cur.y && pos in legal -> "${PluginVars.SECONDARY}$base${PluginVars.RESET}"
-                    pos == cur.x to cur.y -> "${PluginVars.GOLD}$base${PluginVars.RESET}"
+                    pos == cur.x to cur.y -> "${PluginVars.INFO}$base${PluginVars.RESET}"
                     pos == sel -> "${PluginVars.WARN}$base${PluginVars.RESET}"
-                    pos in legal -> "${PluginVars.SECONDARY}$base${PluginVars.RESET}"
-                    cell != null && cell.red -> "${PluginVars.GREEN}$base${PluginVars.RESET}"
+                    pos in legal -> "${PluginVars.GOLD}$base${PluginVars.RESET}"
+                    cell != null && cell.red -> "${PluginVars.RED}$base${PluginVars.RESET}"
                     cell != null -> "${PluginVars.BLUE}$base${PluginVars.RESET}"
                     river(y) -> "${PluginVars.GRAY}$base${PluginVars.RESET}"
                     else -> base
@@ -422,7 +428,7 @@ object PluginMenus {
             }
             sb.append('\n')
         }
-        fun b(t: String, en: Boolean) = if (en) "${PluginVars.SECONDARY}$t${PluginVars.RESET}" else t
+        fun b(t: String, en: Boolean) = if (en) "${PluginVars.WHITE}$t${PluginVars.RESET}" else "${PluginVars.SECONDARY}$t${PluginVars.RESET}"
         val btns = arrayOf(
             arrayOf("", b("\uE804", myTurn), ""),
             arrayOf(b("\uE802", myTurn), "", b("\uE803", myTurn)),
@@ -1526,6 +1532,7 @@ object PluginMenus {
                     .sortedBy { it.text }
                     .filter { it.text != "help" }
                     .filter { it.text != "t" }
+                    .filter { it.text != "a" }
                     .filter { it.text != "ban" }
                     .filter { it.text != "votekick" }
                     .filter { it.text != "over" || player.admin }
@@ -1707,7 +1714,7 @@ object PluginMenus {
         val weak = PluginVars.SECONDARY
 
         val desc = buildString {
-            append("\n${PluginVars.WHITE}${acc.account}\n\uF029${acc.id}${PluginVars.RESET}\n\n")
+            append("\n${PluginVars.WHITE}${acc.account}${PluginVars.RESET}\n${PluginVars.SECONDARY}\uF029${acc.id}${PluginVars.RESET}\n\n")
             append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.score", viewer)}: ${acc.score}${PluginVars.RESET}\n")
             append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.wins", viewer)}: ${acc.wins}${PluginVars.RESET}\n")
             append("${PluginVars.SECONDARY}${I18nManager.get("playerInfo.lang", viewer)}: ${acc.lang}${PluginVars.RESET}\n")
@@ -1873,8 +1880,8 @@ object PluginMenus {
             val isCurrent = map == current
             val isNext    = map == nextMap
             val icon = when {
-                isCurrent -> "\uE829"
-                isNext    -> "\uE809"
+                isCurrent -> "${PluginVars.GREEN}\uE829"
+                isNext    -> "${PluginVars.GOLD}\uE809"
                 else      -> "\uF029"
             }
             val fileName = map.file.name()
@@ -2772,7 +2779,15 @@ object PluginMenus {
         val i18nHud = I18nManager.get("showHud.title", player)
 
         val historyModeState = if (current) "true" else "false"
+        val currentMsgState = !RecordMessage.isDisabled(uuid)
+        val msgToggleLabel = I18nManager.get("others.showMessage", player)
+        val msgToggleState = if (currentMsgState) "true" else "false"
 
+        val toggleMessageBtn = MenuEntry("${strong}$msgToggleLabel: ${weak}$msgToggleState${PluginVars.RESET}") {
+            val newState = !currentMsgState
+            RecordMessage.setDisabled(uuid, !newState)
+            Call.announce(player.con, I18nManager.get("ok", player))
+        }
         val toggleHistoryBtn = MenuEntry("${strong}$i18nShowHistory: ${weak}$historyModeState${PluginVars.RESET}") {
             val newState = !current
             Call.announce(player.con, I18nManager.get("ok", player))
@@ -2791,6 +2806,7 @@ object PluginMenus {
         }
 
         val rows = listOf(
+            toggleMessageBtn,
             toggleHistoryBtn,
             showIconsBtn,
             effectMenuBtn,

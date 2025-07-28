@@ -8,7 +8,7 @@ object PluginVars {
     const val RATIO = 0.65
     const val TEAM_RATIO = 0.7
 
-    const val WHITE = "[#F1F1F1CC]"
+    const val WHITE = "[#F1F1F1DD]"
     const val GRAY = "[#D0D0D0EE]"
     const val INFO = "[#E0E0E0EE]"
     const val GOLD = "[#FFE9AAEE]"
@@ -18,6 +18,7 @@ object PluginVars {
     const val WARN = "[#C8C8C8DD]"
     const val RESET = "[]"
     const val GREEN = "[#D5F7D5DD]"
+    const val RED = "[#F7D5D5DD]"
     const val BLUE  = "[#D5EFF7DD]"
     const val ICON_LEFT = "\uE802"
     const val ICON_OK = "\uE800"

@@ -20,6 +20,7 @@ import plugin.core.PermissionManager.isBanned
 import plugin.core.RecordMessage
 import plugin.core.RevertBuild
 import plugin.core.Translator
+import plugin.core.UnitEffects
 import plugin.core.VoteManager
 
 object NetEvents {
@@ -146,7 +147,7 @@ object NetEvents {
     private fun groupPlayersByLang(exclude: Player): Map<String, List<Player>> {
         val groups = mutableMapOf<String, MutableList<Player>>()
         Groups.player.each { p ->
-            if (p !== exclude) {
+            if (p !== exclude && !RecordMessage.isDisabled(p.uuid())) {
                 val lang = DataManager.getPlayerDataByUuid(p.uuid())?.lang ?: p.locale()
                 groups.getOrPut(lang) { mutableListOf() }.add(p)
             }
@@ -173,6 +174,7 @@ object NetEvents {
         when (pkt.action) {
             AdminAction.kick -> {
                 restore()
+                UnitEffects.clear(uuid)
                 target.kick(KickReason.kick)
             }
 
@@ -182,6 +184,7 @@ object NetEvents {
                     banUntil = Time.millis() + BAN_MS
                     DataManager.requestSave()
                 }
+                UnitEffects.clear(uuid)
                 target.kick(KickReason.banned, BAN_MS)
             }
 

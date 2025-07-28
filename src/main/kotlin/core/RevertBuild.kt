@@ -4,6 +4,7 @@ import arc.math.geom.Point2
 import arc.struct.ObjectMap
 import arc.struct.Seq
 import arc.util.Log
+import arc.util.Strings
 import mindustry.Vars
 import mindustry.content.Blocks
 import mindustry.game.Team
@@ -27,7 +28,6 @@ object RevertBuild {
         }
     }
 
-    private const val RECORD_WINDOW_SEC = 1000
 
     private data class BlockEdit(
         val block: Block,
@@ -61,8 +61,6 @@ object RevertBuild {
         val existing = map.get(pos)
         if (existing != null && !existing.destroy) {
             map.put(pos, existing.copy(destroy = true, timeNanos = now))
-        } else {
-            map.put(pos, BlockEdit(Blocks.air, tile.team().id, 0, now, true))
         }
     }
 
@@ -72,7 +70,6 @@ object RevertBuild {
 
     fun showHistory(caller: Player?, x: Short, y: Short) {
         val nowNanos = System.nanoTime()
-        val cutoffNanos = RECORD_WINDOW_SEC * 1_000_000_000L
         val sb = StringBuilder()
         for (uuid in lastEdits.keys()) {
             val edits = lastEdits[uuid] ?: continue
@@ -80,17 +77,16 @@ object RevertBuild {
                 val pos = entry.key
                 if (kotlin.math.abs(pos.x - x) > 1 || kotlin.math.abs(pos.y - y) > 1) continue
                 val edit = entry.value
-                if (nowNanos - edit.timeNanos > cutoffNanos) continue
-
-                val name = Vars.netServer.admins.getInfoOptional(uuid)?.lastName ?: "unknown"
-                val icon = GetIcon.getBuildingIcon(edit.block)
+                if (!edit.block.canBeBuilt() || edit.block === Blocks.air) return
+                val name = Strings.stripColors(Vars.netServer.admins.getInfoOptional(uuid)?.lastName ?: "unknown")
+                val icon = if (edit.destroy) "${PluginVars.RED}${GetIcon.getBuildingIcon(edit.block)}${PluginVars.RESET}" else "${PluginVars.GRAY}${GetIcon.getBuildingIcon(edit.block)}${PluginVars.RESET}"
                 val deltaSec = ((nowNanos - edit.timeNanos) / 1_000_000_000L).toString()
                 val action = if (edit.destroy)
                     I18nManager.get("revertbuild.removed", caller)
                 else
                     I18nManager.get("revertbuild.built", caller)
 
-                sb.append("${PluginVars.WHITE}(${pos.x},${pos.y})${PluginVars.RESET} ")
+                sb.append("${PluginVars.SECONDARY}(${pos.x},${pos.y})${PluginVars.RESET} ")
                     .append(name)
                     .append(" ")
                     .append("${PluginVars.SECONDARY}${deltaSec}s${PluginVars.RESET} ")
@@ -134,7 +130,7 @@ object RevertBuild {
                     if (now - edit.timeNanos > cutoff) continue
                     Vars.world.tile(pos.x, pos.y)?.let { tile ->
                         if (edit.destroy && edit.block.canBeBuilt()) Call.setTile(tile, edit.block, Team.get(edit.teamId), edit.rotation)
-                       /* else Call.setTile(tile, Blocks.air, Team.derelict, 0) */
+                        /* else Call.setTile(tile, Blocks.air, Team.derelict, 0) */
                         toDel.add(Point2(pos))
                     }
                 }

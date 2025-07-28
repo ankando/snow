@@ -73,9 +73,14 @@ object ClientCommands {
         register("rules", "", "helpCmd.rules") { _, player ->
             PluginMenus.showRulesMenu(player)
         }
-        register("ban", "<id> <seconds>", "Ban a player by id") { args, viewer ->
-            if (args.size != 2) return@register
-
+        register("ban", "[id] [seconds]", "Ban a player by id") { args, viewer ->
+            if (!isCoreAdmin(viewer.uuid())) {
+                return@register
+            }
+            if (args.size != 2) {
+                Call.announce(viewer.con, "${PluginVars.WARN}[id [seconds]${PluginVars.RESET}")
+                return@register
+            }
             val id = args[0].toIntOrNull()
             val seconds = args[1].toLongOrNull()
 
@@ -86,7 +91,12 @@ object ClientCommands {
 
             val playerData = DataManager.players[id]
             if (playerData == null) {
-                Call.announce(viewer.con, "${PluginVars.WARN}Player not found.${PluginVars.RESET}")
+                Call.announce(viewer.con, "${PluginVars.WARN}${I18nManager.get("login.notFound", viewer)}${PluginVars.RESET}")
+                return@register
+            }
+
+            if (isCoreAdmin(id)) {
+                Call.announce(viewer.con, "${PluginVars.WARN}${I18nManager.get("votekick.noadmin", viewer)}${PluginVars.RESET}")
                 return@register
             }
 
@@ -130,7 +140,7 @@ object ClientCommands {
         register("over", "", "helpCmd.over") { _, player ->
             PluginMenus.showGameOverMenu(player)
         }
-        register("others", "", "helpCmd.others") { _, player ->
+        register("misc", "", "helpCmd.misc") { _, player ->
             PluginMenus.showOthersMenu(player)
         }
         register("sync", "", "helpCmd.sync") { _, player ->
@@ -192,6 +202,37 @@ object ClientCommands {
             if (args.size > 1) args.copyOfRange(1, args.size).joinToString(" ") else ""
             beginVotekick(player, target)
         }
+
+        register("a", "<...>", "Send Messages to admins") { args, player ->
+            if (args.isEmpty()) return@register
+
+            val message = args.joinToString(" ")
+            val playerName = player.name() ?: I18nManager.get("unknown", player)
+
+            val selfPrefix = "${PluginVars.INFO}<\uE82C>${PluginVars.RESET} " +
+                    "${PluginVars.INFO}$playerName${PluginVars.RESET}: ${PluginVars.GRAY}"
+            val selfMessage = "$selfPrefix$message${PluginVars.RESET}"
+            player.sendMessage(selfMessage)
+
+            Groups.player.each { receiver ->
+                if (receiver === player || !receiver.admin) return@each
+                val rPrefix = "${PluginVars.INFO}<\uE82C>${PluginVars.RESET} " +
+                        "${PluginVars.INFO}$playerName${PluginVars.RESET}: ${PluginVars.GRAY}"
+                val acc = DataManager.getPlayerDataByUuid(receiver.uuid())
+                val lang = acc?.lang ?: receiver.locale()
+
+                translate(message, "auto", lang, { translated ->
+                    val msg = if (translated != message)
+                        "$rPrefix$message ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                    else
+                        selfMessage
+                    receiver.sendMessage(msg)
+                }, {
+                    receiver.sendMessage(selfMessage)
+                })
+            }
+        }
+
         register("t", "<...>", "helpCmd.t") { args, player ->
             if (args.isEmpty()) return@register
 
@@ -205,6 +246,7 @@ object ClientCommands {
 
             Groups.player.each { receiver ->
                 if (receiver === player || receiver.team() != player.team()) return@each
+                if (RecordMessage.isDisabled(receiver.uuid())) return@each
                 val rPrefix = "${PluginVars.INFO}<${I18nManager.get("team.tag", receiver)}>${PluginVars.RESET} " +
                         "${PluginVars.INFO}$playerName${PluginVars.RESET}: ${PluginVars.GRAY}"
                 val acc = DataManager.getPlayerDataByUuid(receiver.uuid())

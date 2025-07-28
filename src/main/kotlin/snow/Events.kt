@@ -37,10 +37,9 @@ object EventManager {
             if (isCoreAdmin(player.uuid())) {
                 player.admin = true
             }
-            RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("joined", player)}")
-            Groups.player.each { p ->  p.sendMessage("${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${PluginVars.INFO}${Strings.stripColors(player.name)}${PluginVars.RESET} ${PluginVars.SECONDARY}${I18nManager.get("joined", p)}${PluginVars.RESET}")}
+            RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} joined")
+            Groups.player.each { p ->  if (!RecordMessage.isDisabled(p.uuid())) { p.sendMessage("${PluginVars.SECONDARY}${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("joined", p)}")}}
         }
-
 
 
         Events.on(PlayerConnectionConfirmed::class.java) { e ->
@@ -69,8 +68,8 @@ object EventManager {
             }
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
             if (pData != null) {
-                RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("left", player)}")
-                Groups.player.each { p ->  p.sendMessage("${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${PluginVars.INFO}${Strings.stripColors(player.name)}${PluginVars.RESET} ${PluginVars.SECONDARY}${I18nManager.get("left", p)}${PluginVars.RESET}")}
+                RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} left")
+                Groups.player.each { p -> if (!RecordMessage.isDisabled(p.uuid())) {p.sendMessage("${PluginVars.SECONDARY}${pData.id} ${Strings.stripColors(player.name)} ${I18nManager.get("left", p)}")}}
             }
         }
 
@@ -92,10 +91,10 @@ object EventManager {
         }
 
         Events.on(ResetEvent::class.java) {
+            RecordMessage.clear()
             PlayerTeam.clear()
             RevertBuild.clearAll()
             VoteManager.clearVote()
-            NextMap.clear()
         }
 
         Events.on(BlockBuildEndEvent::class.java) { event ->

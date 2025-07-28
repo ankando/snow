@@ -4,18 +4,20 @@ import mindustry.Vars
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
+import plugin.snow.PluginVars
 
 object HudTextController {
 
 enum class Mode(val displayName: String, val generator: (Player) -> String) {
         TIME("Time", fun(player): String {
-            val minutes = (Vars.state.tick / 3600f).toInt()
-            val seconds = (Vars.state.tick / 60f).toInt()
-            return "%02d:%02d".format(minutes, seconds)
+            val totalSeconds = Vars.state.tick / 60
+            val minutes = totalSeconds / 60
+            val seconds = totalSeconds % 60
+            return "${PluginVars.INFO}%02d:%02d${PluginVars.RESET}".format(minutes.toInt(), seconds.toInt())
         }),
 
         COORDS("Location", fun(player): String {
-            return "(${player.tileX()}, ${player.tileY()})"
+            return "${PluginVars.INFO}(${player.tileX()}, ${player.tileY()})${PluginVars.RESET}"
         });
     }
 
