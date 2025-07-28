@@ -4,8 +4,7 @@ object RecordMessage {
     private val messages = mutableListOf<String>()
     private val disabledUuids = mutableSetOf<String>()
 
-    fun add(message: String, uuid: String? = null) {
-        if (uuid != null && isDisabled(uuid)) return
+    fun add(message: String) {
         synchronized(messages) {
             messages.add(message)
         }
