@@ -169,7 +169,7 @@ object PluginMenus {
                 return@registerMenu
             }
             11 -> {
-                    Call.hideFollowUpMenu(me.con, gomokuMenuId)
+                Call.hideFollowUpMenu(me.con, gomokuMenuId)
                 return@registerMenu
             }
         }
@@ -2072,6 +2072,12 @@ object PluginMenus {
             }
             account.uuids.add(p.uuid())
             DataManager.requestSave()
+            if (Vars.state.rules.pvp) {
+                p.team(Team.derelict)
+                showTeamMenu(p)
+            } else {
+                p.team(Vars.state.rules.defaultTeam)
+            }
             Call.announce(p.con, "${PluginVars.SUCCESS}${I18nManager.get("login.success", p)}${PluginVars.RESET}")
         }(player)
     }
