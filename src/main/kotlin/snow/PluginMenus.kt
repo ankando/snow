@@ -3226,33 +3226,6 @@ object PluginMenus {
         val rows = mutableListOf<MenuEntry>()
 
         if (isAdmin) {
-            rows += MenuEntry("${PluginVars.WHITE}${I18nManager.get("emoji.add", player)}${PluginVars.RESET}") {
-                MenusManage.createTextInput(
-                    title = I18nManager.get("emoji.input.url", player),
-                    desc = "",
-                    placeholder = "",
-                    isNum = false,
-                    maxChars = 200
-                ) { _, url ->
-                    if (url.isBlank()) return@createTextInput
-
-                    val filename = Emoji.download(url)
-                    if (filename == null) {
-                        Call.announce(
-                            player.con,
-                            "${PluginVars.ERROR}${I18nManager.get("emoji.error.download_failed", player)}${PluginVars.RESET}"
-                        )
-                        return@createTextInput
-                    }
-
-                    Call.announce(
-                        player.con,
-                        "${PluginVars.SUCCESS}${I18nManager.get("emoji.added", player)}: $filename${PluginVars.RESET}"
-                    )
-                    showEmojisMenu(player, page)
-                }(player)
-            }
-
             rows += MenuEntry("${PluginVars.WHITE}${I18nManager.get("emoji.delete", player)}${PluginVars.RESET}") {
                 val deleteRows = files.map { file ->
                     MenuEntry("${PluginVars.WHITE}${file.name()}${PluginVars.RESET}") {
@@ -3296,8 +3269,4 @@ object PluginMenus {
             options = { _, _, _ -> rows }
         )(player, page)
     }
-
-
-
-
 }

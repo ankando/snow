@@ -10,10 +10,8 @@ import mindustry.gen.Call
 import mindustry.gen.Player
 import mindustry.graphics.Layer
 import mindustry.logic.LMarkerControl
-import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
-import kotlin.collections.iterator
 import kotlin.math.max
 
 object Emoji {
@@ -22,36 +20,6 @@ object Emoji {
 
     init {
         if (!emojiDir.exists()) emojiDir.mkdirs()
-    }
-
-    fun download(url: String): String? {
-        return try {
-            val lower = url.lowercase()
-            if (!(lower.endsWith(".png") || lower.endsWith(".jpg"))) return null
-
-            val rawName = url.substringAfterLast('/')
-            val cleaned = rawName.replace(Regex("[^a-zA-Z0-9._-]"), "")
-                .trimStart('.')
-
-            if (cleaned.isBlank()) return null
-
-            val connection = URL(url).openConnection()
-            connection.connect()
-
-            val length = connection.getHeaderFieldInt("Content-Length", -1)
-            if (length > 800 * 1024) return null
-
-            val input = connection.getInputStream()
-            val bytes = input.readBytes()
-            input.close()
-
-            if (bytes.size > 800 * 1024) return null
-
-            emojiDir.child(cleaned).writeBytes(bytes, false)
-            cleaned
-        } catch (_: Exception) {
-            null
-        }
     }
 
     fun print(player: Player, filename: String, size: Int = -1, scale: Float = -1f) {
