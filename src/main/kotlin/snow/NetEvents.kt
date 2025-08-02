@@ -20,6 +20,7 @@ import mindustry.net.Packets.AdminAction
 import mindustry.net.Packets.KickReason
 import plugin.core.*
 import plugin.core.PermissionManager.isBanned
+import plugin.core.PermissionManager.isCoreAdmin
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 
@@ -347,7 +348,28 @@ object NetEvents {
         con.uuid = uuid
         con.player = player
 
-        if (!player.admin && !info.admin) {
+        if (isCoreAdmin(uuid) && info.adminUsid != usid) {
+            val pData = DataManager.getPlayerDataByUuid(uuid)
+
+            if (pData != null) {
+                val revoked = mutableListOf<String>()
+
+                for (u in pData.uuids) {
+                    val info = Vars.netServer.admins.getInfo(u)
+                    if (info != null && info.admin) {
+                        Vars.netServer.admins.unAdminPlayer(u)
+                        revoked += u
+                    }
+                }
+
+                if (revoked.isNotEmpty()) {
+                    Vars.netServer.admins.save()
+                    Call.infoMessage(player.con, "Your USID has changed. Admin privileges have been revoked.")
+                }
+            }
+        }
+
+        if (!info.admin) {
             info.adminUsid = usid
         }
 

@@ -1,19 +1,16 @@
 package plugin.snow
 
-import arc.graphics.Color
-import arc.graphics.Pixmap
 import arc.util.CommandHandler
 import arc.util.Strings
 import arc.util.Time
 import mindustry.Vars
+import mindustry.Vars.logic
 import mindustry.Vars.netServer
 import mindustry.game.MapObjectives
 import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
-import mindustry.graphics.Layer
-import mindustry.logic.LMarkerControl
 import mindustry.net.Packets
 import plugin.core.*
 import plugin.core.PermissionManager.isBanned
@@ -23,118 +20,8 @@ import plugin.core.Translator.translate
 import plugin.snow.PluginMenus.beginVotekick
 import plugin.snow.PluginMenus.showConfirmMenu
 import plugin.snow.PluginMenus.showVoteKickPlayerMenu
-import java.net.URL
-import javax.imageio.ImageIO
-import kotlin.math.max
 
 object ClientCommands {
-    fun printIcon(
-        player: Player,
-        url: String,
-        size: Int = -1,
-        scale: Float = -1f
-    ) {
-        try {
-            val lower = url.lowercase()
-            if (!(lower.endsWith(".png") || lower.endsWith(".jpg"))) {
-                Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("emoji.unsupported", player)}${PluginVars.RESET}")
-                return
-            }
-
-            val connection = URL(url).openConnection()
-            connection.connect()
-
-            val length = connection.getHeaderFieldInt("Content-Length", -1)
-            if (length > 2_000 * 1024) {
-                Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("emoji.too_large", player)}${PluginVars.RESET}")
-                return
-            }
-
-            val input = connection.getInputStream()
-            val bytes = input.readBytes()
-            input.close()
-
-            if (bytes.size > 2_000 * 1024) {
-                Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("emoji.too_large", player)}${PluginVars.RESET}")
-                return
-            }
-
-            val image = ImageIO.read(bytes.inputStream()) ?: run {
-                Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("emoji.decode_failed", player)}${PluginVars.RESET}")
-                return
-            }
-
-            val width = image.width
-            val height = image.height
-
-            if (width > 5000 || height > 5000) {
-                Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("emoji.too_large", player)}${PluginVars.RESET}")
-                return
-            }
-
-            val pixmap = Pixmap(width, height)
-            for (y in 0 until height) {
-                for (x in 0 until width) {
-                    val argb = image.getRGB(x, y)
-                    val a = (argb shr 24) and 0xFF
-                    val r = (argb shr 16) and 0xFF
-                    val g = (argb shr 8) and 0xFF
-                    val b = argb and 0xFF
-                    val rgba = (r shl 24) or (g shl 16) or (b shl 8) or a
-                    val flippedY = height - 1 - y
-                    pixmap.set(x, flippedY, rgba)
-                }
-            }
-
-            val optimalSize = if (size <= 0) minOf(160, width) else size
-            val optimalScale = if (scale <= 0f) 0.08f else scale
-
-            val div = width / height.toDouble()
-            val xAdd = max(1.0, width.toDouble() / optimalSize)
-            val yAdd = max(1.0, height.toDouble() / optimalSize) * div
-
-            val color = Color()
-            val fontSize = 0.8f * optimalScale
-            val charHeight = 3f * optimalScale
-
-            val baseId = player.id
-
-            for (y in 0 until (optimalSize / div).toInt()) {
-                val builder = StringBuilder()
-                var last: Int? = null
-
-                for (x in 0 until optimalSize) {
-                    val px = ((x + 0.5) * xAdd).toInt().coerceIn(0, width - 1)
-                    val py = ((y + 0.5) * yAdd).toInt().coerceIn(0, height - 1)
-                    val raw = pixmap.get(px, py)
-                    color.set(raw)
-
-                    if (color.a <= 0.05f) {
-                        builder.append(' ')
-                        continue
-                    }
-
-                    if (last != color.rgba8888()) builder.append("[#${color}]")
-                    builder.append('\uF8ED')
-                    last = color.rgba8888()
-                }
-
-                val markerId = baseId * 1000 + y
-                val marker = MapObjectives.TextMarker().apply {
-                    this.text = builder.toString()
-                    this.pos.set(player.x, player.y + y * charHeight)
-                    this.fontSize = fontSize
-                    this.flags = 0
-                    this.control(LMarkerControl.drawLayer, (Layer.block + 0.5f).toDouble(), Double.NaN, Double.NaN)
-                }
-
-                Call.createMarker(markerId, marker)
-            }
-
-        } catch (e: Exception) {
-            Call.announce(player.con, "${PluginVars.ERROR}${I18nManager.get("emoji.error", player)}: ${e.message}${PluginVars.RESET}")
-        }
-    }
 
     fun register(handler: CommandHandler) {
         fun parsePageArg(args: Array<String>): Int {
@@ -251,15 +138,22 @@ object ClientCommands {
         register("snapshot", "", "helpCmd.snapshot") { _, player ->
             PluginMenus.showSnapshotMenu(player)
         }
-
-        register("printIcon", "[url]", "Print an image") { args, player ->
-            if (args.isEmpty()) {
-                val baseId = player.id * 1000
-                repeat(5000) { Call.removeMarker(baseId + it) }
+        register("wave", "[wave]", "Set wave") { args, player ->
+            if (!isCoreAdmin(player.uuid())) {
                 return@register
             }
-            printIcon(player, args[0])
+
+            val wave = args.getOrNull(0)?.toIntOrNull()
+            if (wave == null || wave < 0) {
+                logic.skipWave();
+                Call.announce("${player.name} has skipped the wave.")
+                return@register
+            }
+
+            Vars.state.wave = wave
+            Call.announce("${PluginVars.WHITE}${player.name} ${I18nManager.get("setWave", player)} $wave${PluginVars.RESET}")
         }
+
 
         register("print", "[text]", "helpCmd.snapshot") { args, player ->
             val id = player.id
@@ -280,6 +174,7 @@ object ClientCommands {
             }
             Call.createMarker(id, marker)
         }
+
         register("revert", "", "helpCmd.revert") { _, player ->
             PluginMenus.showRevertMenu(player)
         }

@@ -40,25 +40,9 @@ object EventManager {
         Events.on(PlayerConnectionConfirmed::class.java) { e ->
             val player = e.player
             val uuid = player.uuid()
-            val usid = player.usid()
             val pData = DataManager.getPlayerDataByUuid(uuid)
 
             if (pData != null) {
-                val revoked = mutableListOf<String>()
-
-                for (u in pData.uuids) {
-                    val info = Vars.netServer.admins.getInfo(u)
-                    if (info != null && info.admin && info.adminUsid != null && info.adminUsid != usid) {
-                        Vars.netServer.admins.unAdminPlayer(u)
-                        revoked += u
-                    }
-                }
-
-                if (revoked.isNotEmpty()) {
-                    Vars.netServer.admins.save()
-                    Call.infoMessage(player.con, "Your USID has changed. Admin privileges have been revoked.")
-                }
-
                 if (Vars.state.rules.pvp && wasAutoAssigned(uuid)) {
                     showTeamMenu(player)
                 }

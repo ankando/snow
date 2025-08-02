@@ -39,13 +39,13 @@ object Emoji {
             connection.connect()
 
             val length = connection.getHeaderFieldInt("Content-Length", -1)
-            if (length > 2000 * 1024) return null
+            if (length > 1000 * 1024) return null
 
             val input = connection.getInputStream()
             val bytes = input.readBytes()
             input.close()
 
-            if (bytes.size > 2000 * 1024) return null
+            if (bytes.size > 1000 * 1024) return null
 
             emojiDir.child(cleaned).writeBytes(bytes, false)
             cleaned
@@ -54,18 +54,13 @@ object Emoji {
         }
     }
 
-
     fun print(player: Player, filename: String, size: Int = -1, scale: Float = -1f) {
         try {
             val file = emojiDir.child(filename)
-            if (!file.exists()) {
-                return
-            }
+            if (!file.exists()) return
 
             val bytes = file.readBytes()
-            val image = ImageIO.read(bytes.inputStream()) ?: run {
-                return
-            }
+            val image = ImageIO.read(bytes.inputStream()) ?: return
 
             val width = image.width
             val height = image.height
@@ -79,31 +74,23 @@ object Emoji {
                     val g = (argb shr 8) and 0xFF
                     val b = argb and 0xFF
                     val rgba = (r shl 24) or (g shl 16) or (b shl 8) or a
-                    val flippedY = height - 1 - y
-                    pixmap.set(x, flippedY, rgba)
+                    pixmap.set(x, y, rgba)
                 }
             }
 
-            val optimalSize = if (size <= 0) minOf(80, width) else size
-            val optimalScale = if (scale <= 0f) 0.2f else scale
-
+            val optimalSize = if (size <= 0) minOf(50, width) else size
             val div = width / height.toDouble()
             val xAdd = max(1.0, width.toDouble() / optimalSize)
             val yAdd = max(1.0, height.toDouble() / optimalSize) * div
 
             val color = Color()
-            val fontSize = 0.8f * optimalScale
-            val charHeight = 3f * optimalScale
+            val fontSize = 1f * (if (scale <= 0f) 0.15f else scale)
 
-            val baseId = player.id
-            val uuid = player.uuid()
-            val ids = mutableListOf<Int>()
-            var lines = 0
+            val builder = StringBuilder()
+            val rows = minOf((optimalSize / div).toInt(), optimalSize)
 
-            for (y in 0 until (optimalSize / div).toInt()) {
-                val builder = StringBuilder()
-                var last: Int? = null
-
+            for (y in 0 until rows) {
+                var lastColor: Int? = null
                 for (x in 0 until optimalSize) {
                     val px = ((x + 0.5) * xAdd).toInt().coerceIn(0, width - 1)
                     val py = ((y + 0.5) * yAdd).toInt().coerceIn(0, height - 1)
@@ -112,33 +99,36 @@ object Emoji {
 
                     if (color.a <= 0.05f) {
                         builder.append(' ')
-                        continue
+                    } else {
+                        val currentColor = color.rgba8888()
+                        if (currentColor != lastColor) {
+                            builder.append("[#${color}]")
+                            lastColor = currentColor
+                        }
+                        builder.append('\uF8ED')
                     }
-
-                    if (last != color.rgba8888()) builder.append("[#${color}]")
-                    builder.append('\uF8ED')
-                    last = color.rgba8888()
                 }
-
-                val markerId = baseId * 1000 + y
-                val marker = MapObjectives.TextMarker().apply {
-                    this.text = builder.toString()
-                    this.pos.set(player.x, player.y + y * charHeight)
-                    this.fontSize = fontSize
-                    this.flags = 0
-                    this.control(LMarkerControl.drawLayer, (Layer.block + 0.5f).toDouble(), Double.NaN, Double.NaN)
-                }
-                Call.createMarker(markerId, marker)
-                ids.add(markerId)
-                lines++
+                builder.append('\n')
             }
 
-            printed[uuid] = Triple(System.currentTimeMillis(), ids, lines)
+            val markerId = player.id * 1000
+            val marker = MapObjectives.TextMarker().apply {
+                text = builder.toString()
+                pos.set(player.x, player.y)
+                this.fontSize = fontSize
+                this.flags = 0
+                this.control(LMarkerControl.drawLayer, (Layer.block + 0.5f).toDouble(), Double.NaN, Double.NaN)
+            }
+
+            Call.createMarker(markerId, marker)
+            printed[player.uuid()] = Triple(System.currentTimeMillis(), listOf(markerId), 1)
 
         } catch (e: Exception) {
             Log.err("[red]Error displaying emoji: ${e.message}")
         }
     }
+
+
 
     fun removePrint(uuid: String, seconds: Int) {
         val (time, ids, _) = printed[uuid] ?: return
