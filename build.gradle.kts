@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "ity.snow"
-version = "1.1"
+version = "1.2"
 
 repositories {
     mavenCentral()
@@ -17,6 +17,7 @@ repositories {
 dependencies {
     compileOnly("com.github.Anuken.Arc:arc-core:v150")
     compileOnly("com.github.Anuken.Mindustry:core:v150")
+    implementation("com.maxmind.geoip2:geoip2:4.3.0")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 }
 

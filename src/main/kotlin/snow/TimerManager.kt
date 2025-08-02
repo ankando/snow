@@ -5,7 +5,6 @@ import arc.util.Timer
 import mindustry.Vars
 import mindustry.gen.Call
 import mindustry.gen.Groups
-import mindustry.net.Administration
 import plugin.core.DataManager
 import plugin.core.Emoji
 import plugin.core.HudTextController
@@ -13,27 +12,12 @@ import plugin.core.UnitEffects
 import plugin.core.VoteManager
 
 object TimerManager {
-    private fun formatGameTime(): String {
-        val ticks = Vars.state.tick.toLong()
-        val totalSeconds = ticks / 60
-        val minutes = (totalSeconds / 60).toInt()
-
-        return buildString {
-            append(PluginVars.WARN)
-            append("Game started $minutes minute")
-            if (minutes != 1) append("s")
-            append(" ago.")
-            append(PluginVars.RESET)
-        }
-    }
-
     fun init() {
         Timer.schedule(::runPeriodicTasks, 0f, 2f)
     }
 
     private fun runPeriodicTasks() {
         if (!Vars.state.isGame) return
-        Administration.Config.desc.set(formatGameTime())
         VoteManager.endVotes()
         if (DataManager.needSave) {
             DataManager.saveAll()
