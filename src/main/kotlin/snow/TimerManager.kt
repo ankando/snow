@@ -17,11 +17,12 @@ object TimerManager {
         val ticks = Vars.state.tick.toLong()
         val totalSeconds = ticks / 60
         val minutes = (totalSeconds / 60).toInt()
-        val seconds = (totalSeconds % 60).toInt()
 
         return buildString {
             append(PluginVars.WARN)
-            append(String.format("%02d:%02d", minutes, seconds))
+            append("Game started $minutes minute")
+            if (minutes != 1) append("s")
+            append(" ago.")
             append(PluginVars.RESET)
         }
     }
