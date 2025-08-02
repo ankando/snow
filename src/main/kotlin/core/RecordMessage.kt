@@ -33,10 +33,4 @@ object RecordMessage {
             if (disabled) disabledUuids.add(uuid) else disabledUuids.remove(uuid)
         }
     }
-
-    fun getDisabledUuids(): List<String> {
-        return synchronized(disabledUuids) {
-            disabledUuids.toList()
-        }
-    }
 }

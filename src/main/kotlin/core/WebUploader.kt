@@ -40,8 +40,7 @@ object WebUploader {
             val token = session.parameters["token"]?.firstOrNull()
             if (token.isNullOrBlank()) return forbidden()
 
-            val uuid = verifyToken(token)
-            if (uuid == null) return forbidden()
+            val uuid = verifyToken(token) ?: return forbidden()
 
             val isAdmin = try {
                 TokensManager.isAdminToken(token)

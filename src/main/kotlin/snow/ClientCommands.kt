@@ -145,7 +145,7 @@ object ClientCommands {
 
             val wave = args.getOrNull(0)?.toIntOrNull()
             if (wave == null || wave < 0) {
-                logic.skipWave();
+                logic.skipWave()
                 Call.announce("${player.name} has skipped the wave.")
                 return@register
             }
