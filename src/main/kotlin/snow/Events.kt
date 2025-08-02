@@ -10,7 +10,6 @@ import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Sounds
 import plugin.core.*
-import plugin.core.PermissionManager.isCoreAdmin
 import plugin.core.PlayerTeam.wasAutoAssigned
 import plugin.core.ShowLabel.showMapLabel
 import plugin.core.TagUtil.getMode
@@ -35,25 +34,38 @@ object EventManager {
                 showAuthMenu(player)
                 return@on
             }
-            if (isCoreAdmin(player.uuid())) {
-                player.admin = true
-            }
             RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} joined")
-            Groups.player.each { p ->  if (!RecordMessage.isDisabled(p.uuid())) { p.sendMessage("${PluginVars.WARN}${Strings.stripColors(player.name)} #${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${I18nManager.get("joined", p)}")}}
         }
-
 
         Events.on(PlayerConnectionConfirmed::class.java) { e ->
             val player = e.player
-            val pData = DataManager.getPlayerDataByUuid(player.uuid())
+            val uuid = player.uuid()
+            val usid = player.usid()
+            val pData = DataManager.getPlayerDataByUuid(uuid)
 
-            if (pData != null && Vars.state.rules.pvp && wasAutoAssigned(player.uuid())
-            ) {
-                showTeamMenu(player)
+            if (pData != null) {
+                val revoked = mutableListOf<String>()
+
+                for (u in pData.uuids) {
+                    val info = Vars.netServer.admins.getInfo(u)
+                    if (info != null && info.admin && info.adminUsid != null && info.adminUsid != usid) {
+                        Vars.netServer.admins.unAdminPlayer(u)
+                        revoked += u
+                    }
+                }
+
+                if (revoked.isNotEmpty()) {
+                    Vars.netServer.admins.save()
+                    Call.infoMessage(player.con, "Your USID has changed. Admin privileges have been revoked.")
+                }
+
+                if (Vars.state.rules.pvp && wasAutoAssigned(uuid)) {
+                    showTeamMenu(player)
+                }
             }
+
             showMapLabel(player)
         }
-
 
         Events.on(PlayerLeave::class.java) { e ->
             val player = e.player
@@ -70,8 +82,8 @@ object EventManager {
             val pData = DataManager.getPlayerDataByUuid(player.uuid())
             if (pData != null) {
                 RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} left")
-                Groups.player.each { p ->  if (!RecordMessage.isDisabled(p.uuid())) { p.sendMessage("${PluginVars.WARN}${Strings.stripColors(player.name)} #${PluginVars.INFO}${pData.id}${PluginVars.RESET} ${I18nManager.get("left", p)}")}}
             }
+
         }
 
         Events.on(GameOverEvent::class.java) { e ->

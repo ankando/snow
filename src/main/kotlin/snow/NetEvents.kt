@@ -4,7 +4,9 @@ import arc.Core
 import arc.Events
 import arc.util.Strings
 import arc.util.Time
+import arc.util.io.Writes
 import mindustry.Vars
+import mindustry.core.Version
 import mindustry.game.EventType
 import mindustry.game.Team
 import mindustry.gen.AdminRequestCallPacket
@@ -13,15 +15,13 @@ import mindustry.gen.Groups
 import mindustry.gen.Player
 import mindustry.net.Administration.TraceInfo
 import mindustry.net.NetConnection
+import mindustry.net.Packets
 import mindustry.net.Packets.AdminAction
 import mindustry.net.Packets.KickReason
-import plugin.core.DataManager
+import plugin.core.*
 import plugin.core.PermissionManager.isBanned
-import plugin.core.RecordMessage
-import plugin.core.RevertBuild
-import plugin.core.Translator
-import plugin.core.UnitEffects
-import plugin.core.VoteManager
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 
 object NetEvents {
 
@@ -88,7 +88,7 @@ object NetEvents {
         val clean = baseHex.removePrefix("#")
         require(clean.length == 6)
 
-        val r0 = clean.substring(0, 2).toInt(16) / 255f
+        val r0 = clean.take(2).toInt(16) / 255f
         val g0 = clean.substring(2, 4).toInt(16) / 255f
         val b0 = clean.substring(4, 6).toInt(16) / 255f
 
@@ -104,7 +104,6 @@ object NetEvents {
         val l = (max + min) / 2f
         val s = if (d == 0f) 0f else d / (1f - kotlin.math.abs(2f * l - 1f))
 
-        val baseHue        = h
         val baseSaturation = (s * 0.4f).coerceIn(0f, 0.35f)
         val baseLightness  = (l * 0.6f + 0.40f).coerceIn(0.60f, 0.90f)
 
@@ -124,7 +123,7 @@ object NetEvents {
             return Triple(ch(r1), ch(g1), ch(b1))
         }
 
-        val (rFin, gFin, bFin) = hslToRgb(baseHue, baseSaturation, baseLightness)
+        val (rFin, gFin, bFin) = hslToRgb(h, baseSaturation, baseLightness)
         return String.format("#%02X%02X%02X", rFin, gFin, bFin)
     }
 
@@ -211,5 +210,160 @@ object NetEvents {
         }
     }
 
+    @JvmStatic
+    fun connect(con: NetConnection?, any: Any?) {
+        con ?: return
+        Events.fire(EventType.ConnectionEvent(con))
 
+        val ip = con.address
+        val admins = Vars.netServer.admins
+        if (admins.isIPBanned(ip) || admins.isSubnetBanned(ip)) {
+            con.kick(KickReason.banned); return
+        }
+
+        Vars.net.connections.filter { it.address == ip }.takeIf { it.size >= 5 }?.forEach(NetConnection::close)
+    }
+
+    @JvmStatic
+    fun connectPacket(con: NetConnection?, pkt: Packets.ConnectPacket?) {
+        if (con == null || pkt == null || con.kicked) return
+
+        fun kick(msg: String = "", reason: KickReason? = null) {
+            reason?.let { con.kick(it, 0) } ?: con.kick(msg, 0)
+        }
+
+        val admins = Vars.netServer.admins
+        val uuid = pkt.uuid ?: return
+        val usid = pkt.usid ?: run { kick(reason = KickReason.idInUse); return }
+        val ip = con.address
+
+        if (con.address.startsWith("steam:")) {
+            pkt.uuid = con.address.removePrefix("steam:")
+        }
+
+        Events.fire(EventType.ConnectPacketEvent(con, pkt))
+        con.connectTime = Time.millis()
+
+        if (admins.isIPBanned(ip) || admins.isSubnetBanned(ip) || admins.isIDBanned(uuid) || con.kicked || !con.isConnected) return
+
+        if (con.hasBegunConnecting) {
+            kick(reason = KickReason.idInUse)
+            return
+        }
+
+        con.hasBegunConnecting = true
+        con.mobile = pkt.mobile
+
+        val cleanName = Strings.stripColors(pkt.name).trim()
+        if (cleanName.isBlank() || cleanName.length > 40 || cleanName.any { it.isISOControl() }) {
+            kick(reason = KickReason.nameEmpty)
+            return
+        }
+        pkt.name = Vars.netServer.fixName(cleanName)
+
+        val info = admins.getInfo(uuid)
+
+        if (Time.millis() < admins.getKickTime(uuid, ip)) {
+            kick(reason = KickReason.recentKick)
+            return
+        }
+
+        if (admins.playerLimit > 0 && Groups.player.size() >= admins.playerLimit && !admins.isAdmin(uuid, usid)) {
+            kick(reason = KickReason.playerLimit)
+            return
+        }
+
+        val extraMods = pkt.mods.copy()
+        val missingMods = Vars.mods.getIncompatibility(extraMods)
+
+        if (!extraMods.isEmpty || !missingMods.isEmpty) {
+            val msg = buildString {
+                append("${PluginVars.WARN}${I18nManager.get("mod.incompatible", null)}${PluginVars.RESET}\n\n")
+                if (!missingMods.isEmpty) {
+                    append("${PluginVars.SECONDARY}${I18nManager.get("mod.missing", null)}\n> ")
+                    append(missingMods.joinToString("\n> ")).append("${PluginVars.RESET}\n\n")
+                }
+                if (!extraMods.isEmpty) {
+                    append("${PluginVars.SECONDARY}${I18nManager.get("mod.extra", null)}\n> ")
+                    append(extraMods.joinToString("\n> ")).append(PluginVars.RESET)
+                }
+            }
+            Call.infoMessage(con, msg)
+            return
+        }
+
+        if (!admins.isWhitelisted(uuid, usid)) {
+            info.adminUsid = usid
+            info.lastName = cleanName
+            info.id = uuid
+            admins.save()
+            kick(reason = KickReason.whitelist)
+            return
+        }
+
+        if (pkt.versionType == null || ((pkt.version == -1 || pkt.versionType != Version.type) && Version.build != -1 && !admins.allowsCustomClients())) {
+            kick(reason = if (pkt.versionType != Version.type) KickReason.typeMismatch else KickReason.customClient)
+            return
+        }
+
+
+        if (Groups.player.any { Strings.stripColors(it.name).trim().equals(cleanName, ignoreCase = true) }) {
+            kick(reason = KickReason.nameInUse)
+            return
+        }
+
+        if (Groups.player.any { it.uuid() == uuid || it.usid() == usid }) {
+            con.uuid = uuid
+            kick(reason = KickReason.idInUse)
+            return
+        }
+
+        for (other in Vars.net.connections) {
+            if (other !== con && uuid == other.uuid) {
+                con.uuid = uuid
+                kick(reason = KickReason.idInUse)
+                return
+            }
+        }
+
+        if (pkt.version != Version.build && Version.build != -1 && pkt.version != -1) {
+            kick(reason = if (pkt.version > Version.build) KickReason.serverOutdated else KickReason.clientOutdated)
+            return
+        }
+
+
+        if (pkt.version == -1) {
+            con.modclient = true
+        }
+
+        val player = Player.create().apply {
+            this.name = pkt.name
+            this.con = con
+            this.locale = pkt.locale ?: "en"
+            this.color.set(pkt.color).a = 1f
+        }
+
+        con.usid = usid
+        con.uuid = uuid
+        con.player = player
+
+        if (!player.admin && !info.admin) {
+            info.adminUsid = usid
+        }
+
+        admins.updatePlayerJoined(uuid, ip, pkt.name)
+
+        try {
+            val output = Writes(DataOutputStream(ByteArrayOutputStream(127)))
+            player.write(output)
+        } catch (_: Throwable) {
+            con.kick(KickReason.nameEmpty)
+            return
+        }
+
+        player.team(Vars.netServer.assignTeam(player))
+        Vars.netServer.sendWorldData(player)
+        Core.app.post { Vars.platform.updateRPC() }
+        Events.fire(EventType.PlayerConnect(player))
+    }
 }

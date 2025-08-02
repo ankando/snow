@@ -3,6 +3,7 @@ package plugin.core
 import mindustry.game.Gamemode
 
 object TagUtil {
+
     fun getTags(desc: String): List<String> {
         val regex = Regex("""\[@([a-zA-Z0-9_-]+)(=[^]]+)?]""")
         return regex.findAll(desc.lowercase())
@@ -28,5 +29,17 @@ object TagUtil {
         return result
     }
 
+    fun getTagValues(desc: String): Map<String, List<String>> {
+        val regex = Regex("""\[@([a-zA-Z0-9_-]+)(=([^]]+))?]""")
+        val result = mutableMapOf<String, List<String>>()
 
+        regex.findAll(desc.lowercase()).forEach { match ->
+            val key = match.groupValues[1]
+            val raw = match.groupValues.getOrNull(3)
+            val values = raw?.split(',')?.map { it.trim() } ?: emptyList()
+            result[key] = values
+        }
+
+        return result
+    }
 }

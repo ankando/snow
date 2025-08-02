@@ -56,13 +56,23 @@ object RevertBuild {
     fun recordRemove(player: Player, tile: Tile) {
         val uuid = player.uuid()
         val pos = Point2(tile.x.toInt(), tile.y.toInt())
-        val map = lastEdits.get(uuid) ?: ObjectMap<Point2, BlockEdit>().also { lastEdits.put(uuid, it) }
         val now = System.nanoTime()
-        val existing = map.get(pos)
-        if (existing != null && !existing.destroy) {
-            map.put(pos, existing.copy(destroy = true, timeNanos = now))
+
+        val it = lastEdits.entries().iterator()
+        while (it.hasNext()) {
+            val entry = it.next()
+            val map = entry.value
+            val existing = map[pos] ?: continue
+            if (!existing.destroy) {
+                map.remove(pos)
+
+                val myMap = lastEdits.get(uuid) ?: ObjectMap<Point2, BlockEdit>().also { lastEdits.put(uuid, it) }
+                myMap.put(pos, existing.copy(destroy = true, timeNanos = now))
+                return
+            }
         }
     }
+
 
     fun restorePlayerEditsWithinSeconds(uuid: String, seconds: Int) = restoreEdits(listOf(uuid), seconds)
     fun restoreAllPlayersEditsWithinSeconds(seconds: Int) = restoreEdits(getAllPlayersWithEdits(), seconds)

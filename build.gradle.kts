@@ -18,7 +18,6 @@ dependencies {
     compileOnly("com.github.Anuken.Arc:arc-core:v150")
     compileOnly("com.github.Anuken.Mindustry:core:v150")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
-    implementation("com.maxmind.geoip2:geoip2:4.3.0")
 }
 
 kotlin {
@@ -90,7 +89,7 @@ val syncI18nBundles by tasks.registering {
                 val trimmed = line.trim()
                 if (trimmed.isEmpty() || trimmed.startsWith("#") || !trimmed.contains("=")) return@forEach
                 val idx = trimmed.indexOf("=")
-                val key = trimmed.substring(0, idx).trim()
+                val key = trimmed.take(idx).trim()
                 val value = trimmed.substring(idx + 1).trim()
                 map[key] = value
             }

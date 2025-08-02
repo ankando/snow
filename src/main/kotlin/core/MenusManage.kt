@@ -114,7 +114,8 @@ object MenusManage {
         desc: (Player) -> String,
         onResult: (Player, Int?) -> Unit,
         yesText: String = "${PluginVars.GRAY}${PluginVars.ICON_OK}${PluginVars.RESET}",
-        noText: String = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
+        noText: String = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}",
+        canStop: Boolean = false
     ): (Player) -> Unit {
         val menuHolder = object {
             var menuId: Int = -1
@@ -129,19 +130,23 @@ object MenusManage {
         }
 
         menuHolder.show = { player ->
-            val buttons = arrayOf(arrayOf(yesText, noText))
+            val rows = mutableListOf<Array<String>>()
+            rows += arrayOf(yesText, noText)
+            if (canStop) {
+                rows += arrayOf("${PluginVars.GRAY}${PluginVars.ICON_STOP}${PluginVars.RESET}")
+            }
+
             Call.followUpMenu(
                 player.con,
                 menuHolder.menuId,
                 title(player),
                 "\n${desc(player)}\n",
-                buttons
+                rows.toTypedArray()
             )
         }
 
         return menuHolder.show
     }
-
 
     fun createTextInput(
         title: String,

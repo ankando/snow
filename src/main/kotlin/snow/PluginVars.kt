@@ -24,4 +24,5 @@ object PluginVars {
     const val ICON_OK = "\uE800"
     const val ICON_CLOSE = "\uE815"
     const val ICON_NEXT = "\uE803"
+    const val ICON_STOP = "⚠"
 }
