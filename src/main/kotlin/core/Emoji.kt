@@ -39,13 +39,13 @@ object Emoji {
             connection.connect()
 
             val length = connection.getHeaderFieldInt("Content-Length", -1)
-            if (length > 1000 * 1024) return null
+            if (length > 800 * 1024) return null
 
             val input = connection.getInputStream()
             val bytes = input.readBytes()
             input.close()
 
-            if (bytes.size > 1000 * 1024) return null
+            if (bytes.size > 800 * 1024) return null
 
             emojiDir.child(cleaned).writeBytes(bytes, false)
             cleaned
