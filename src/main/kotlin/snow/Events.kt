@@ -215,28 +215,38 @@ object EventManager {
         PlayerTeam.all().forEach { (uuid, team) ->
             if (team == Team.derelict) return@forEach
             val acc = DataManager.getPlayerDataByUuid(uuid) ?: return@forEach
-            val pl = Groups.player.find { it.uuid() == uuid } ?: return@forEach
+            val isWinner = team == winner
 
-            if (team == winner) {
+            if (isWinner) {
                 DataManager.updatePlayer(acc.id) {
                     it.score += winScore
                     it.wins++
                 }
-                Call.announce(
-                    pl.con,
-                    "${PluginVars.SUCCESS}${I18nManager.get("game.victory", pl)} +$winScore${PluginVars.RESET}"
-                )
             } else {
                 val penalty = max(20, 50 - teamCounts.getValue(team) * 3)
                 DataManager.updatePlayer(acc.id) {
                     it.score = max(0, it.score - penalty)
                 }
-                Call.announce(
-                    pl.con,
-                    "${PluginVars.ERROR}${I18nManager.get("game.defeat", pl)} -$penalty${PluginVars.RESET}"
-                )
+            }
+
+            val pl = Groups.player.find { it.uuid() == uuid }
+            if (pl != null) {
+                if (isWinner) {
+                    Call.announce(
+                        pl.con,
+                        "${PluginVars.SUCCESS}${I18nManager.get("game.victory", pl)} +$winScore${PluginVars.RESET}"
+                    )
+                } else {
+                    val penalty = max(20, 50 - teamCounts.getValue(team) * 3)
+                    Call.announce(
+                        pl.con,
+                        "${PluginVars.ERROR}${I18nManager.get("game.defeat", pl)} -$penalty${PluginVars.RESET}"
+                    )
+                }
             }
         }
+
+    }
     }
 
     private fun handleCoopGameOver(winner: Team) {
@@ -256,4 +266,3 @@ object EventManager {
             )
         }
     }
-}
