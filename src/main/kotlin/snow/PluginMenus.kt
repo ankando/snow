@@ -5,6 +5,7 @@ import arc.math.Mathf
 import arc.util.Strings
 import arc.util.Time
 import mindustry.Vars
+import mindustry.Vars.logic
 import mindustry.content.Blocks
 import mindustry.content.Weathers
 import mindustry.core.NetClient
@@ -41,7 +42,7 @@ object PluginMenus {
             I18nManager.get("game.lightsout",     player)            to ::showLightsOutGame,
             I18nManager.get("game.guessthenumber", player)           to ::showGuessGameMenu,
             I18nManager.get("game.gomoku",         player)           to ::showGomokuEntry,
-            "中国象棋"                                                       to::showXiangqiEntry
+            I18nManager.get("game.xiangqi",         player)                                                    to::showXiangqiEntry
         )
 
         val menu = MenusManage.createMenu<Unit>(
@@ -370,8 +371,8 @@ object PluginMenus {
                                     xLastInvite[uid] = now
                                     Call.announce(pl.con, I18nManager.get("gomoku.inv.sent", pl))
                                     createConfirmMenu(
-                                        title = { "中国象棋邀请" },
-                                        desc = { "${pl.name()} 邀请你下中国象棋" },
+                                        title = { I18nManager.get("game.xiangqi", pl) },
+                                        desc = { "${pl.name()} ${I18nManager.get("xiangqi.invite", pl)}" },
                                         onResult = { tgt, ch ->
                                             if (ch == 0 && xGames.none { it.key.first == uid || it.key.second == uid || it.key.first == tgt.uuid() || it.key.second == tgt.uuid() })
                                                 startXiangqi(uid, tgt.uuid())
@@ -384,7 +385,7 @@ object PluginMenus {
                 }
             }
         MenusManage.createMenu<Unit>(
-            title = { _, _, _, _ -> "中国象棋 - 选择对手" },
+            title = { _, _, _, _ -> I18nManager.get("game.xiangqi",         pl) },
             desc = { _, _, _ -> "" },
             paged = false,
             options = { _, _, _ -> rows }
@@ -444,17 +445,17 @@ object PluginMenus {
             arrayOf("", b("\uE804", myTurn), ""),
             arrayOf(b("\uE802", myTurn), "", b("\uE803", myTurn)),
             arrayOf("", b("\uE805", myTurn), ""),
-            arrayOf(b("选择", myTurn)),
-            arrayOf(b("投降", true)),
-            arrayOf(b("退出", true))
+            arrayOf(b(I18nManager.get("gomoku.select",pl), myTurn)),
+            arrayOf(b(I18nManager.get("gomoku.end",pl), true)),
+            arrayOf(b(I18nManager.get("gomoku.exit",pl), true))
         )
         val info = when {
-            st.winner == null && myTurn -> "轮到你"
-            st.winner == null -> "等待对手"
-            st.winner == isRed -> "你赢了！"
-            else -> "你输了！"
+            st.winner == null && myTurn -> I18nManager.get("gomoku.yourturn",pl)
+            st.winner == null -> I18nManager.get("gomoku.wait",pl)
+            st.winner == isRed -> I18nManager.get("gomoku.win",pl)
+            else -> I18nManager.get("gomoku.lose",pl)
         }
-        Call.followUpMenu(pl.con, xMenuId, "中国象棋", "\n$info\n\n$sb", btns)
+        Call.followUpMenu(pl.con, xMenuId, I18nManager.get("game.xiangqi",pl), "\n$info\n\n$sb", btns)
     }
 
     private enum class Stone(val glyph: String){ EMPTY("\uF8F7"), BLACK("\uF7C9"), WHITE("\uF8A6") }
@@ -1222,7 +1223,7 @@ object PluginMenus {
                     Groups.player.each { p ->
                         if (p != player && !isBanned(p.uuid())) {
                             val t = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
-                            val d = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.rtv.desc", p)} $mapName#$index${PluginVars.RESET}"
+                            val d = "\uE827\n${PluginVars.GRAY}${player.name} ${I18nManager.get("snapshot.rtv.desc", p)} $mapName#$index${PluginVars.RESET}"
                             val menu = createConfirmMenu(
                                 title = { t },
                                 desc = { d },
@@ -1918,7 +1919,22 @@ object PluginMenus {
                 sender.sendMessage("${PluginVars.INFO}\uE835 ${target.name()}:${PluginVars.RESET}${PluginVars.GRAY} $input")
             }(viewer)
         }
-
+        val btnKick = MenuEntry( label = "${if (canSet) strong else weak}${I18nManager.get("playerInfo.kick", viewer)}${PluginVars.RESET}"
+        ) {
+            if (!canSet) {
+                Call.announce(
+                    viewer.con,
+                    "${PluginVars.WARN}${I18nManager.get("no.permission", viewer)}${PluginVars.RESET}"
+                )
+                return@MenuEntry
+            }
+            showConfirmMenu(viewer) {
+                target.kick(Packets.KickReason.kick)
+                Call.announce(
+                    "${PluginVars.GRAY}${viewer.name} ${I18nManager.get("playerInfo.kick.success", viewer)} ${target.name}${PluginVars.RESET}"
+                )
+            }
+        }
         val btnVoteKick = MenuEntry(
             "${if (canSet) strong else weak}${I18nManager.get("playerInfo.votekick", viewer)}${PluginVars.RESET}"
         ) {
@@ -1935,8 +1951,22 @@ object PluginMenus {
                     Call.announce(viewer.con, "${PluginVars.WARN}${I18nManager.get("vote.running", viewer)}${PluginVars.RESET}")
                     return@showConfirmMenu
                 }
-                beginVotekick(viewer, target)
+
+                MenusManage.createTextInput(
+                    title = I18nManager.get("votekick.reason.title", viewer),
+                    desc = I18nManager.get("votekick.reason.desc", viewer),
+                    placeholder = "",
+                    isNum = false,
+                    maxChars = 50
+                ) { p, reason ->
+                    if (reason.isBlank()) {
+                        Call.announce(p.con, "${PluginVars.WARN}${I18nManager.get("votekick.reason.empty", p)}${PluginVars.RESET}")
+                        return@createTextInput
+                    }
+                    beginVotekick(viewer, target, reason)
+                }(viewer)
             }
+
         }
 
         val btnBan = MenuEntry(
@@ -1976,7 +2006,13 @@ object PluginMenus {
             }(viewer)
         }
 
-        val rows = mutableListOf(btnPm, btnVoteKick)
+        val rows = mutableListOf<MenuEntry>()
+        rows += btnPm
+        if (canSet) {
+            rows += btnKick
+        }
+
+        rows += btnVoteKick
 
         if (canSet) {
             rows += btnBan
@@ -1997,7 +2033,7 @@ object PluginMenus {
             reloader.begin()
             Vars.state.map = map
             Vars.world.loadMap(map)
-            Vars.logic.play()
+            logic.play()
             reloader.end()
         } catch (_: Exception) {}
     }
@@ -2221,7 +2257,7 @@ object PluginMenus {
                     Groups.player.each { p ->
                         if (p != player && !isBanned(p.uuid())) {
                             val title = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
-                            val desc = "\uE827 ${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
+                            val desc = "\uE827\n${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
 
                             val menu = createConfirmMenu(
                                 title = { title },
@@ -2916,13 +2952,18 @@ object PluginMenus {
                 val url = "https://github.com/ankando/snow"
                 Call.openURI(p.con, url)
             }
+            2 -> {
+                val url = "https://t.me/+8CKs4wFzMQlkNTAy"
+                Call.openURI(p.con, url)
+            }
         }
     }
 
     fun showAboutMenu(player: Player) {
         val closeLabel = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
         val openLabel = "${PluginVars.INFO}${I18nManager.get("open", player)}${PluginVars.RESET}"
-        val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel))
+        val openTGLabel = "${PluginVars.INFO}Telegram${PluginVars.RESET}"
+        val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel), arrayOf(openTGLabel))
 
         Call.menu(
             player.con,
@@ -2947,11 +2988,31 @@ object PluginMenus {
         val rows = kickablePlayers.map { target ->
             MenuEntry("${PluginVars.WHITE}${target.name()}${PluginVars.RESET}") {
                 showConfirmMenu(player) {
+                    if (isCoreAdmin(player.uuid())) {
+                        Call.kick(target.con, Packets.KickReason.kick)
+                        Call.announce(
+                            "@${target.name} ${PluginVars.WARN}${I18nManager.get("votekick.kicked.byadmin", player)}${PluginVars.RESET}"
+                        )
+                        return@showConfirmMenu
+                    }
                     if (VoteManager.globalVoteSession != null) {
                         Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
                         return@showConfirmMenu
                     }
-                    beginVotekick(player, target)
+
+                    MenusManage.createTextInput(
+                        title = I18nManager.get("votekick.reason.title", player),
+                        desc = I18nManager.get("votekick.reason.desc", player),
+                        placeholder = "",
+                        isNum = false,
+                        maxChars = 50
+                    ) { p, reason ->
+                        if (reason.isBlank()) {
+                            Call.announce(p.con, "${PluginVars.WARN}${I18nManager.get("votekick.reason.empty", p)}${PluginVars.RESET}")
+                            return@createTextInput
+                        }
+                        beginVotekick(player, target, reason)
+                    }(player)
                 }
             }
         }
@@ -2970,7 +3031,11 @@ object PluginMenus {
         )(player, 1)
     }
 
-    fun beginVotekick(viewer: Player, target: Player) {
+    fun beginVotekick(viewer: Player, target: Player, reason: String) {
+        if (VoteManager.globalVoteSession != null) {
+            Call.announce(viewer.con, "${PluginVars.WARN}${I18nManager.get("vote.running", viewer)}${PluginVars.RESET}")
+            return
+        }
         val exclude = listOf(viewer, target)
 
         VoteManager.createGlobalVote(
@@ -2978,7 +3043,7 @@ object PluginMenus {
             excludePlayers = exclude
         ) { ok ->
             if (ok) {
-                target.kick("")
+                target.kick(reason)
                 restorePlayerEditsWithinSeconds(target.uuid(), 200)
             }
         }
@@ -2986,9 +3051,9 @@ object PluginMenus {
         Groups.player.each { p ->
             if (p != viewer && p != target && !isBanned(p.uuid())) {
                 val title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", p)}${PluginVars.RESET}"
-                val desc = "\uE817 ${PluginVars.GRAY}${viewer.name} ${
+                val desc = "\uE817\n${PluginVars.GRAY}${viewer.name} ${
                     I18nManager.get("playerInfo.votekick.desc", p)
-                } ${target.name()}${PluginVars.RESET}"
+                } ${target.name()}\n${I18nManager.get("reason", p)}: $reason${PluginVars.RESET}"
 
                 val voteMenu = createConfirmMenu(
                     title = { title },
@@ -3269,4 +3334,95 @@ object PluginMenus {
             options = { _, _, _ -> rows }
         )(player, page)
     }
+    fun showVoteSkipWaveMenu(player: Player) {
+        val options = listOf(
+            MenuEntry("${PluginVars.WHITE}${I18nManager.get("vote.skip.current", player)}${PluginVars.RESET}") {
+                showConfirmMenu(player) {
+                    if (VoteManager.globalVoteSession != null) {
+                        Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                        return@showConfirmMenu
+                    }
+                    VoteManager.createGlobalVote(creator = player) { ok ->
+                        if (ok && Vars.state.isGame) {
+                            logic.skipWave()
+                        }
+                    }
+                    Groups.player.each { p ->
+                        if (p != player && !isBanned(p.uuid())) {
+                            val title = "${PluginVars.INFO}${I18nManager.get("vote.skip.current.title", p)}${PluginVars.RESET}"
+                            val desc = "${PluginVars.GRAY}${player.name} ${I18nManager.get("vote.skip.current.desc", p)}${PluginVars.RESET}"
+                            val menu = createConfirmMenu(
+                                title = { title },
+                                desc = { desc },
+                                canStop = isCoreAdmin(p.uuid()),
+                                onResult = { pl, choice ->
+                                    if (choice == 0) VoteManager.addVote(pl.uuid())
+                                    if (choice == 2) {
+                                        VoteManager.clearVote()
+                                        Call.announce("${PluginVars.GRAY}${p.name} ${I18nManager.get("vote.cancel", p)}${PluginVars.RESET}")
+                                    }
+                                }
+                            )
+                            menu(p)
+                        }
+                    }
+                }
+            },
+
+            MenuEntry("${PluginVars.WHITE}${I18nManager.get("vote.skip.to", player)}${PluginVars.RESET}") {
+                MenusManage.createTextInput(
+                    title = I18nManager.get("vote.skip.to.title", player),
+                    desc = I18nManager.get("vote.skip.to.desc", player),
+                    placeholder = "",
+                    isNum = true,
+                    maxChars = 5
+                ) { p, input ->
+                    val skip = input.toIntOrNull()
+                    if (skip == null || skip <= 0) {
+                        Call.announce(p.con, "${PluginVars.WARN}${I18nManager.get("vote.skip.to.invalid", p)}${PluginVars.RESET}")
+                        return@createTextInput
+                    }
+
+                    showConfirmMenu(p) {
+                        if (VoteManager.globalVoteSession != null) {
+                            Call.announce(p.con, "${PluginVars.WARN}${I18nManager.get("vote.running", p)}${PluginVars.RESET}")
+                            return@showConfirmMenu
+                        }
+                        VoteManager.createGlobalVote(creator = p) { ok ->
+                            if (ok && Vars.state.isGame) {
+                                Vars.state.wave += skip
+                            }
+                        }
+                        Groups.player.each { other ->
+                            if (other != p && !isBanned(other.uuid())) {
+                                val title = "${PluginVars.INFO}${I18nManager.get("vote.skip.to.title", other)}${PluginVars.RESET}"
+                                val desc = "${PluginVars.GRAY}${p.name} ${I18nManager.get("vote.skip.to.desc2", other)}${PluginVars.RESET}"
+                                val menu = createConfirmMenu(
+                                    title = { title },
+                                    desc = { desc },
+                                    canStop = isCoreAdmin(other.uuid()),
+                                    onResult = { pl, choice ->
+                                        if (choice == 0) VoteManager.addVote(pl.uuid())
+                                        if (choice == 2) {
+                                            VoteManager.clearVote()
+                                            Call.announce("${PluginVars.GRAY}${other.name} ${I18nManager.get("vote.cancel", other)}${PluginVars.RESET}")
+                                        }
+                                    }
+                                )
+                                menu(other)
+                            }
+                        }
+                    }
+                }(player)
+            }
+        )
+
+        MenusManage.createMenu<Unit>(
+            title = { _, _, _, _ -> "${PluginVars.GRAY}${I18nManager.get("vote.skipwave.menu.title", player)}${PluginVars.RESET}" },
+            desc = { _, _, _ -> "" },
+            paged = false,
+            options = { _, _, _ -> options }
+        )(player, 1)
+    }
+
 }

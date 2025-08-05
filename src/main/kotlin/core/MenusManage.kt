@@ -28,81 +28,81 @@ object MenusManage {
         menuHolder.menuId = Menus.registerMenu { p, choice ->
             if (p == null || isBanned(p.uuid())) return@registerMenu
 
-                val uuid = p.uuid()
-                val currentPage = pageMap[uuid] ?: 1
-                val userData = dataCache[uuid]
-                val entries = options(p, userData, currentPage)
+            val uuid = p.uuid()
+            val currentPage = pageMap[uuid] ?: 1
+            val userData = dataCache[uuid]
+            val entries = options(p, userData, currentPage)
 
-                if (!paged) {
-                    when (choice) {
-                        0 -> Call.hideFollowUpMenu(p.con, menuHolder.menuId)
-                        in 1..entries.size -> entries[choice - 1].onClick?.invoke(p)
-                    }
-                } else {
-                    val totalPages = max(1, (entries.size + perPage - 1) / perPage)
-                    val page = currentPage.coerceIn(1, totalPages)
-                    val start = (page - 1) * perPage
-                    val end = minOf(start + perPage, entries.size)
+            if (!paged) {
+                when (choice) {
+                    0 -> Call.hideFollowUpMenu(p.con, menuHolder.menuId)
+                    in 1..entries.size -> entries[choice - 1].onClick?.invoke(p)
+                }
+            } else {
+                val totalPages = max(1, (entries.size + perPage - 1) / perPage)
+                val page = currentPage.coerceIn(1, totalPages)
+                val start = (page - 1) * perPage
+                val end = minOf(start + perPage, entries.size)
 
-                    when (choice) {
-                        0 -> menuHolder.show(p, if (page == 1) totalPages else page - 1)
-                        1 -> Call.hideFollowUpMenu(p.con, menuHolder.menuId)
-                        2 -> menuHolder.show(p, if (page == totalPages) 1 else page + 1)
-                        in 3 until (end - start + 3) -> {
-                            val idx = start + (choice - 3)
-                            if (idx in entries.indices) entries[idx].onClick?.invoke(p)
-                        }
+                when (choice) {
+                    0 -> menuHolder.show(p, if (page == 1) totalPages else page - 1)
+                    1 -> Call.hideFollowUpMenu(p.con, menuHolder.menuId)
+                    2 -> menuHolder.show(p, if (page == totalPages) 1 else page + 1)
+                    in 3 until (end - start + 3) -> {
+                        val idx = start + (choice - 3)
+                        if (idx in entries.indices) entries[idx].onClick?.invoke(p)
                     }
                 }
             }
+        }
 
         menuHolder.show = { player, page ->
-                val uuid = player.uuid()
-                val userData = extraData?.invoke(player)
-                dataCache[uuid] = userData
+            val uuid = player.uuid()
+            val userData = extraData?.invoke(player)
+            dataCache[uuid] = userData
 
-                val entries = options(player, userData, page)
+            val entries = options(player, userData, page)
 
-                if (!paged) {
-                    val buttons = mutableListOf<Array<String?>>()
-                    buttons.add(arrayOf("${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"))
-                    entries.forEach { buttons.add(arrayOf(it.label)) }
+            if (!paged) {
+                val buttons = mutableListOf<Array<String?>>()
+                buttons.add(arrayOf("${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"))
+                entries.forEach { buttons.add(arrayOf(it.label)) }
 
-                    Call.followUpMenu(
-                        player.con,
-                        menuHolder.menuId,
-                        title(player, 1, 1, userData),
-                        desc?.invoke(player, 1, userData) ?: "",
-                        buttons.toTypedArray()
+                Call.followUpMenu(
+                    player.con,
+                    menuHolder.menuId,
+                    title(player, 1, 1, userData),
+                    desc?.invoke(player, 1, userData) ?: "",
+                    buttons.toTypedArray()
 
-                    )
-                } else {
-                    val totalPages = max(1, (entries.size + perPage - 1) / perPage)
-                    val currentPage = when {
-                        page < 1 -> totalPages
-                        page > totalPages -> 1
-                        else -> page
-                    }
-                    pageMap[uuid] = currentPage
+                )
+            } else {
+                val totalPages = max(1, (entries.size + perPage - 1) / perPage)
+                val currentPage = when {
+                    page < 1 -> totalPages
+                    page > totalPages -> 1
+                    else -> page
+                }
+                pageMap[uuid] = currentPage
 
-                    val start = (currentPage - 1) * perPage
-                    val end = minOf(start + perPage, entries.size)
-                    val pageEntries = entries.subList(start, end)
+                val start = (currentPage - 1) * perPage
+                val end = minOf(start + perPage, entries.size)
+                val pageEntries = entries.subList(start, end)
 
-                    val prev = if (totalPages == 1 || currentPage == 1) "" else "${PluginVars.SECONDARY}${PluginVars.ICON_LEFT}${PluginVars.RESET}"
-                    val next = if (totalPages == 1 || currentPage == totalPages) "" else "${PluginVars.SECONDARY}${PluginVars.ICON_NEXT}${PluginVars.RESET}"
+                val prev = if (totalPages == 1 || currentPage == 1) "" else "${PluginVars.SECONDARY}${PluginVars.ICON_LEFT}${PluginVars.RESET}"
+                val next = if (totalPages == 1 || currentPage == totalPages) "" else "${PluginVars.SECONDARY}${PluginVars.ICON_NEXT}${PluginVars.RESET}"
 
-                    val buttons = mutableListOf<Array<String?>>()
-                    buttons.add(arrayOf(prev, "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}", next))
-                    pageEntries.forEach { buttons.add(arrayOf(it.label)) }
+                val buttons = mutableListOf<Array<String?>>()
+                buttons.add(arrayOf(prev, "${PluginVars.SECONDARY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}", next))
+                pageEntries.forEach { buttons.add(arrayOf(it.label)) }
 
-                    Call.followUpMenu(
-                        player.con,
-                        menuHolder.menuId,
-                        title(player, currentPage, totalPages, userData),
-                        desc?.invoke(player, currentPage, userData) ?: "",
-                        buttons.toTypedArray()
-                    )
+                Call.followUpMenu(
+                    player.con,
+                    menuHolder.menuId,
+                    title(player, currentPage, totalPages, userData),
+                    desc?.invoke(player, currentPage, userData) ?: "",
+                    buttons.toTypedArray()
+                )
             }
         }
 
@@ -125,17 +125,22 @@ object MenusManage {
         menuHolder.menuId = Menus.registerMenu { p, choice ->
             if (p != null && !isBanned(p.uuid())) {
                 Call.hideFollowUpMenu(p.con, menuHolder.menuId)
-                onResult(p, choice)
+                if (canStop && choice == 0) {
+                    onResult(p, 2)
+                } else if (canStop && choice in 1..2) {
+                    onResult(p, choice - 1)
+                } else {
+                    onResult(p, choice)
+                }
             }
         }
 
         menuHolder.show = { player ->
             val rows = mutableListOf<Array<String>>()
-            rows += arrayOf(yesText, noText)
             if (canStop) {
                 rows += arrayOf("${PluginVars.GRAY}${PluginVars.ICON_STOP}${PluginVars.RESET}")
             }
-
+            rows += arrayOf(yesText, noText)
             Call.followUpMenu(
                 player.con,
                 menuHolder.menuId,
@@ -147,6 +152,8 @@ object MenusManage {
 
         return menuHolder.show
     }
+
+
 
     fun createTextInput(
         title: String,

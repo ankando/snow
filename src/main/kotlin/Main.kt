@@ -178,8 +178,8 @@ class Main : Plugin() {
 
     private val invalidCommandHandler = NetServer.InvalidCommandHandler { player, res ->
         val key = when (res.type) {
-            CommandHandler.ResponseType.manyArguments -> "cmd.too_many_args"
-            CommandHandler.ResponseType.fewArguments -> "cmd.too_few_args"
+            CommandHandler.ResponseType.manyArguments -> "${PluginVars.INFO}${I18nManager.get("cmd.too_many_args", player)}${PluginVars.RESET}"
+            CommandHandler.ResponseType.fewArguments -> "${PluginVars.INFO}${I18nManager.get("cmd.too_few_args", player)}${PluginVars.RESET}"
             else -> null
         }
         key?.let {

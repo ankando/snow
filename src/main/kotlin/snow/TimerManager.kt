@@ -27,10 +27,16 @@ object TimerManager {
             val effect = UnitEffects.getEffect(player)
             val unit = player.unit()
             if (effect != null && unit != null && !unit.dead) {
-                Call.effect(effect, player.x, player.y, unit.rotation, Color.white)
+                Call.effect(effect, player.x, player.y, 0f, Color.white)
             }
             HudTextController.updateAllHudText(player)
         }
-
+        if (InfinityWarPlugin.enabled) {
+            if (System.currentTimeMillis() >= InfinityWarPlugin.nextUpdateBuildTime) {
+                InfinityWarPlugin.updateBuilding()
+                InfinityWarPlugin.nextUpdateBuildTime = System.currentTimeMillis() + 10_000
+            }
+            InfinityWarPlugin.fillBuilding()
+        }
     }
 }

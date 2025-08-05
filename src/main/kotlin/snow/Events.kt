@@ -92,12 +92,16 @@ object EventManager {
             PlayerTeam.clear()
             RevertBuild.clearAll()
             VoteManager.clearVote()
+            InfinityWarPlugin.enabled = false
         }
 
         Events.on(BlockBuildEndEvent::class.java) { event ->
             val unit = event.unit ?: return@on
             val player = unit.player ?: return@on
             val tile = event.tile ?: return@on
+            if (InfinityWarPlugin.enabled) {
+                InfinityWarPlugin.onBlockBuildEnd(tile.build)
+            }
             if (!event.breaking) {
                 RevertBuild.recordBuild(player, tile)
             }
@@ -124,6 +128,8 @@ object EventManager {
 
         Events.on(PlayEvent::class.java) {
             val currentMap  = Vars.state.map
+            val tags = TagUtil.getTags(currentMap.description())
+            InfinityWarPlugin.enabled = "infinitywar" in tags
 
             val mapDataMode = DataManager.maps[currentMap.file.name()]?.modeName
                 ?.lowercase()

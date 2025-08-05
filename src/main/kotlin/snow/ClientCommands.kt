@@ -4,7 +4,6 @@ import arc.util.CommandHandler
 import arc.util.Strings
 import arc.util.Time
 import mindustry.Vars
-import mindustry.Vars.logic
 import mindustry.Vars.netServer
 import mindustry.game.MapObjectives
 import mindustry.game.Team
@@ -138,6 +137,9 @@ object ClientCommands {
         register("snapshot", "", "helpCmd.snapshot") { _, player ->
             PluginMenus.showSnapshotMenu(player)
         }
+        register("votewave", "", "helpCmd.votewave") { _, player ->
+            PluginMenus.showVoteSkipWaveMenu(player)
+        }
         register("wave", "[wave]", "Set wave") { args, player ->
             if (!isCoreAdmin(player.uuid())) {
                 return@register
@@ -145,7 +147,7 @@ object ClientCommands {
 
             val wave = args.getOrNull(0)?.toIntOrNull()
             if (wave == null || wave < 0) {
-                logic.skipWave()
+                Vars.logic.skipWave()
                 Call.announce("${player.name} has skipped the wave.")
                 return@register
             }
@@ -153,7 +155,6 @@ object ClientCommands {
             Vars.state.wave = wave
             Call.announce("${PluginVars.WHITE}${player.name} ${I18nManager.get("setWave", player)} $wave${PluginVars.RESET}")
         }
-
 
         register("print", "[text]", "helpCmd.snapshot") { args, player ->
             val id = player.id
@@ -199,14 +200,14 @@ object ClientCommands {
             }
         }
 
-        register("votekick", "[player] [reason]", "helpCmd.votekick") { args, player ->
+        register("votekick", "[player] [reason...]", "helpCmd.votekick") { args, player ->
             if (args.isEmpty()) {
                 showVoteKickPlayerMenu(player)
                 return@register
             }
 
-
             val targetName = args[0]
+            val reason = if (args.size > 1) args.drop(1).joinToString(" ") else ""
 
             val target = if (
                 targetName.startsWith("#") &&
@@ -250,6 +251,7 @@ object ClientCommands {
                 )
                 return@register
             }
+
             if (Groups.player.size() < 3) {
                 Call.announce(
                     player.con,
@@ -257,9 +259,17 @@ object ClientCommands {
                 )
                 return@register
             }
-            beginVotekick(player, target)
-        }
 
+            if (reason.isBlank()) {
+                Call.announce(
+                    player.con,
+                    "${PluginVars.WARN}${I18nManager.get("votekick.reason.empty", player)}${PluginVars.RESET}"
+                )
+                return@register
+            }
+
+            beginVotekick(player, target, reason)
+        }
 
         register("a", "<...>", "Send Messages to admins") { args, player ->
             if (args.isEmpty()) return@register
