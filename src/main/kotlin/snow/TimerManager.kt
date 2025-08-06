@@ -13,7 +13,7 @@ import plugin.core.VoteManager
 
 object TimerManager {
     fun init() {
-        Timer.schedule(::runPeriodicTasks, 0f, 1f)
+        Timer.schedule(::runPeriodicTasks, 0f, 2f)
     }
 
     private fun runPeriodicTasks() {
