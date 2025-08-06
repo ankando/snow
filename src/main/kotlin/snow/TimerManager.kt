@@ -13,7 +13,7 @@ import plugin.core.VoteManager
 
 object TimerManager {
     fun init() {
-        Timer.schedule(::runPeriodicTasks, 0f, 2f)
+        Timer.schedule(::runPeriodicTasks, 0f, 1f)
     }
 
     private fun runPeriodicTasks() {
@@ -31,12 +31,12 @@ object TimerManager {
             }
             HudTextController.updateAllHudText(player)
         }
-        if (InfinityWarPlugin.enabled) {
-            if (System.currentTimeMillis() >= InfinityWarPlugin.nextUpdateBuildTime) {
-                InfinityWarPlugin.updateBuilding()
-                InfinityWarPlugin.nextUpdateBuildTime = System.currentTimeMillis() + 10_000
+        if (InfinityWar.enabled) {
+            if (System.currentTimeMillis() >= InfinityWar.nextUpdateBuildTime) {
+                InfinityWar.updateBuilding()
+                InfinityWar.nextUpdateBuildTime = System.currentTimeMillis() + 10_000
             }
-            InfinityWarPlugin.fillBuilding()
+            InfinityWar.fillBuilding()
         }
     }
 }

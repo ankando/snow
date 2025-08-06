@@ -2238,7 +2238,7 @@ object PluginMenus {
                 )
             } else {
                 val points = DataManager.getPlayerDataByUuid(player.uuid())?.score ?: 0
-                if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60 && points < 150) {
+                if (Vars.state.isGame && Vars.state.rules.pvp && Vars.state.tick > 5 * 60 * 60 && points < 150 && !isAdmin) {
                     Call.announce(player.con, "${PluginVars.WHITE}${I18nManager.get("inPvP", player)}")
                     return@MenuEntry
                 }
@@ -3043,7 +3043,11 @@ object PluginMenus {
             excludePlayers = exclude
         ) { ok ->
             if (ok) {
-                target.kick(reason)
+                target.kick(reason, 5 * 60_000L)
+                DataManager.getPlayerDataByUuid(target.uuid())?.apply {
+                    banUntil = Time.millis() + 10 * 60_000L
+                    DataManager.requestSave()
+                }
                 restorePlayerEditsWithinSeconds(target.uuid(), 200)
             }
         }

@@ -12,7 +12,7 @@ import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
-object InfinityWarPlugin {
+object InfinityWar {
 
     var enabled: Boolean = true
 
