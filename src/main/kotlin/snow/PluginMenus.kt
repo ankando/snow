@@ -2009,13 +2009,13 @@ object PluginMenus {
 
         val rows = mutableListOf<MenuEntry>()
         rows += btnPm
-        if (canSet) {
+        if (!canSet) {
             rows += btnKick
         }
 
         rows += btnVoteKick
 
-        if (canSet) {
+        if (!canSet) {
             rows += btnBan
         }
         MenusManage.createMenu<Unit>(
