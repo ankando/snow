@@ -2959,7 +2959,7 @@ object PluginMenus {
 
     fun showAboutMenu(player: Player) {
         val closeLabel = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
-        val openLabel = "${PluginVars.INFO}${I18nManager.get("open", player)}${PluginVars.RESET}"
+        val openLabel = "${PluginVars.INFO}Website${PluginVars.RESET}"
         val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel))
 
         Call.menu(
