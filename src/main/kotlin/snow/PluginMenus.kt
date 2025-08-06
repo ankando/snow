@@ -2257,7 +2257,7 @@ object PluginMenus {
                     Groups.player.each { p ->
                         if (p != player && !isBanned(p.uuid())) {
                             val title = "${PluginVars.INFO}${I18nManager.get("rtv.title", p)}${PluginVars.RESET}"
-                            val desc = "\uE827\n${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
+                            val desc = "\uE827\n\n${PluginVars.GRAY}${player.name} ${I18nManager.get("rtv.desc", p)} ${map.name()}${PluginVars.RESET}"
 
                             val menu = createConfirmMenu(
                                 title = { title },
@@ -3051,7 +3051,7 @@ object PluginMenus {
         Groups.player.each { p ->
             if (p != viewer && p != target && !isBanned(p.uuid())) {
                 val title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", p)}${PluginVars.RESET}"
-                val desc = "\uE817\n${PluginVars.GRAY}${viewer.name} ${
+                val desc = "\uE817\n\n${PluginVars.GRAY}${viewer.name} ${
                     I18nManager.get("playerInfo.votekick.desc", p)
                 } ${target.name()}\n${I18nManager.get("reason", p)}: $reason${PluginVars.RESET}"
 

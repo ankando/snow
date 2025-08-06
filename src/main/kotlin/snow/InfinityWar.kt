@@ -6,6 +6,7 @@ import mindustry.content.Blocks
 import mindustry.content.Items
 import mindustry.gen.Building
 import mindustry.gen.Groups
+import mindustry.world.blocks.defense.turrets.Turret
 import mindustry.world.consumers.*
 import java.lang.ref.WeakReference
 import java.util.Collections
@@ -47,7 +48,7 @@ object InfinityWarPlugin {
     }
     private fun isFillable(build: Building?): Boolean {
         if (build == null) return false
-
+        if (build.block is Turret) return false
         if (consumeBuildings.any { weak -> weak.get() === build }) {
             return false
         }
@@ -65,7 +66,7 @@ object InfinityWarPlugin {
     }
     private fun processBuild(build: Building) {
         val block = build.block
-
+        if (build.block is Turret) return
         for (consumer in block.consumers) {
             when (consumer) {
                 is ConsumeItems -> {
