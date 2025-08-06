@@ -248,7 +248,12 @@ object ClientCommands {
             }
 
             if (isCoreAdmin(player.uuid())) {
-                Call.kick(target.con, Packets.KickReason.kick)
+                target.kick(reason, 5 * 60_000L)
+                DataManager.getPlayerDataByUuid(target.uuid())?.apply {
+                    banUntil = Time.millis() + 10 * 60_000L
+                    DataManager.requestSave()
+                }
+                restorePlayerEditsWithinSeconds(target.uuid(), 200)
                 Call.announce(
                     "@${target.name} ${PluginVars.WARN}${I18nManager.get("votekick.kicked.byadmin", player)}${PluginVars.RESET}"
                 )
