@@ -1465,7 +1465,8 @@ object PluginMenus {
         "reactorExplosions",
         "possessionAllowed",
         "unitAmmo",
-        "fog"
+        "fog",
+        "lighting"
     )
     private val editableFloatRules = listOf(
         "buildSpeedMultiplier",
@@ -3320,6 +3321,7 @@ object PluginMenus {
 
         files.forEach { file ->
             rows += MenuEntry("${PluginVars.WHITE}${file.name()}${PluginVars.RESET}") {
+                Emoji.removePrint(player.uuid(), 1)
                 Emoji.print(player, file.name())
             }
         }

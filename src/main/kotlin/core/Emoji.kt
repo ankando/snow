@@ -24,7 +24,7 @@ object Emoji {
 
 
 
-    fun print(player: Player, filename: String, size: Int = -1, scale: Float = -1f, parts: Int = 5) {
+    fun print(player: Player, filename: String, size: Int = -1, scale: Float = -1f, parts: Int = 4) {
         try {
             val file = emojiDir.child(filename)
             if (!file.exists()) return
@@ -48,13 +48,13 @@ object Emoji {
                 }
             }
 
-            val optimalSize = if (size <= 0) minOf(100, width) else size
+            val optimalSize = if (size <= 0) minOf(80, width) else size
             val div = width / height.toDouble()
             val xAdd = max(1.0, width.toDouble() / optimalSize)
             val yAdd = max(1.0, height.toDouble() / optimalSize) * div
 
             val color = Color()
-            val fontSize = if (scale <= 0f) 0.1f else scale
+            val fontSize = if (scale <= 0f) 0.09f else scale
             val totalRows = minOf((optimalSize / div).toInt(), optimalSize)
 
             val safeParts = parts.coerceIn(1, 5)

@@ -23,7 +23,6 @@ object TimerManager {
             DataManager.saveAll()
         }
         Groups.player.each { player ->
-            Emoji.removePrint(player.uuid(), 10)
             val effect = UnitEffects.getEffect(player)
             val unit = player.unit()
             if (effect != null && unit != null && !unit.dead) {
