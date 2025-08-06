@@ -2008,14 +2008,15 @@ object PluginMenus {
         }
 
         val rows = mutableListOf<MenuEntry>()
-        rows += btnPm
-        if (!canSet) {
+
+        if (isCoreAdmin(viewer.uuid())) {
             rows += btnKick
         }
 
+        rows += btnPm
         rows += btnVoteKick
 
-        if (!canSet) {
+        if (isCoreAdmin(viewer.uuid())) {
             rows += btnBan
         }
         MenusManage.createMenu<Unit>(
