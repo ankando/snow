@@ -236,17 +236,17 @@ object EventManager {
             }
 
             val pl = Groups.player.find { it.uuid() == uuid }
-            if (pl != null) {
+            if (pl != null && PlayerTeam.getTeam(pl.uuid()) != null) {
                 if (isWinner) {
                     Call.announce(
                         pl.con,
-                        "${PluginVars.SUCCESS}${I18nManager.get("game.victory", pl)} +$winScore${PluginVars.RESET}"
+                        "${PluginVars.WHITE}${I18nManager.get("game.victory", pl)} +$winScore${PluginVars.RESET}"
                     )
                 } else {
                     val penalty = max(20, 50 - teamCounts.getValue(team) * 3)
                     Call.announce(
                         pl.con,
-                        "${PluginVars.ERROR}${I18nManager.get("game.defeat", pl)} -$penalty${PluginVars.RESET}"
+                        "${PluginVars.WHITE}${I18nManager.get("game.defeat", pl)} -$penalty${PluginVars.RESET}"
                     )
                 }
             }

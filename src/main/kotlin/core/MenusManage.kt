@@ -138,7 +138,7 @@ object MenusManage {
         menuHolder.show = { player ->
             val rows = mutableListOf<Array<String>>()
             if (canStop) {
-                rows += arrayOf("${PluginVars.GRAY}${PluginVars.ICON_STOP}${PluginVars.RESET}")
+                rows += arrayOf("${PluginVars.SECONDARY}${PluginVars.ICON_STOP}${PluginVars.RESET}")
             }
             rows += arrayOf(yesText, noText)
             Call.followUpMenu(

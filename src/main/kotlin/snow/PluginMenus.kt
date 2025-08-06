@@ -2949,11 +2949,7 @@ object PluginMenus {
         when (choice) {
             0 -> Call.hideFollowUpMenu(p.con, uploadMapMenuId)
             1 -> {
-                val url = "https://github.com/ankando/snow"
-                Call.openURI(p.con, url)
-            }
-            2 -> {
-                val url = "https://t.me/+8CKs4wFzMQlkNTAy"
+                val url = "https://mdt.ity.moe"
                 Call.openURI(p.con, url)
             }
         }
@@ -2962,8 +2958,7 @@ object PluginMenus {
     fun showAboutMenu(player: Player) {
         val closeLabel = "${PluginVars.GRAY}${PluginVars.ICON_CLOSE}${PluginVars.RESET}"
         val openLabel = "${PluginVars.INFO}${I18nManager.get("open", player)}${PluginVars.RESET}"
-        val openTGLabel = "${PluginVars.INFO}Telegram${PluginVars.RESET}"
-        val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel), arrayOf(openTGLabel))
+        val buttons = arrayOf(arrayOf(closeLabel), arrayOf(openLabel))
 
         Call.menu(
             player.con,
@@ -3428,5 +3423,33 @@ object PluginMenus {
             options = { _, _, _ -> options }
         )(player, 1)
     }
+
+    private val serverList = listOf(
+        Triple("Main", "185.209.85.92", 6567),
+        Triple("Asthosus", "185.209.85.92", 6568),
+    )
+
+    private val serverListMenuId: Int = Menus.registerMenu { player, choice ->
+        if (player == null || choice < 0) return@registerMenu
+
+        if (choice == 0) {
+            return@registerMenu
+        }
+
+        val selectedServer = serverList.getOrNull(choice - 1) ?: return@registerMenu
+
+        showConfirmMenu(player) {
+            Call.connect(player.con, selectedServer.second, selectedServer.third)
+        }
+    }
+
+    fun showServerListMenu(player: Player) {
+        val buttons = mutableListOf(arrayOf(PluginVars.ICON_CLOSE))
+        serverList.forEach { server ->
+            buttons.add(arrayOf("${PluginVars.WHITE}${server.first} - ${server.second}:${server.third}${PluginVars.RESET}"))
+        }
+        Call.menu(player.con, serverListMenuId, "${PluginVars.WHITE}${I18nManager.get("serverlist", player)}${PluginVars.RESET}", "", buttons.toTypedArray())
+    }
+
 
 }

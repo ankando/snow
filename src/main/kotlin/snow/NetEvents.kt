@@ -265,9 +265,11 @@ object NetEvents {
         val info = admins.getInfo(uuid)
 
         if (Time.millis() < admins.getKickTime(uuid, ip)) {
-            kick(reason = KickReason.recentKick)
+            val remainingTime = (admins.getKickTime(uuid, ip) - Time.millis()) / 1000
+            kick("[#D0D0D8DD]You have been recently kicked. Please wait $remainingTime seconds before rejoining.")
             return
         }
+
 
         if (admins.playerLimit > 0 && Groups.player.size() >= admins.playerLimit && !admins.isAdmin(uuid, usid)) {
             kick(reason = KickReason.playerLimit)
@@ -290,7 +292,6 @@ object NetEvents {
                 }
             }
             Call.infoMessage(con, msg)
-            return
         }
 
         if (!admins.isWhitelisted(uuid, usid)) {
@@ -306,7 +307,6 @@ object NetEvents {
             kick(reason = if (pkt.versionType != Version.type) KickReason.typeMismatch else KickReason.customClient)
             return
         }
-
 
         if (Groups.player.any { Strings.stripColors(it.name).trim().equals(cleanName, ignoreCase = true) }) {
             kick(reason = KickReason.nameInUse)
