@@ -134,7 +134,7 @@ object ClientCommands {
         register("about", "", "helpCmd.about") { _, player ->
             PluginMenus.showAboutMenu(player)
         }
-        register("allserver", "", "helpCmd.server") { _, player ->
+        register("allserver", "", "helpCmd.allserver") { _, player ->
             PluginMenus.showServerListMenu(player)
         }
         register("snapshot", "", "helpCmd.snapshot") { _, player ->
