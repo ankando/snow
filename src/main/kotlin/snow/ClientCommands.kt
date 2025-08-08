@@ -10,7 +10,6 @@ import mindustry.game.Team
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
-import mindustry.net.Packets
 import plugin.core.*
 import plugin.core.PermissionManager.isBanned
 import plugin.core.PermissionManager.isCoreAdmin
@@ -353,6 +352,14 @@ object ClientCommands {
             }
 
             showConfirmMenu(player) {
+                if (VoteManager.globalVoteSession != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                    return@showConfirmMenu
+                }
+                if (VoteManager.getTeamVoteSession(player.team()) != null) {
+                    Call.announce(player.con, "${PluginVars.WARN}${I18nManager.get("vote.running", player)}${PluginVars.RESET}")
+                    return@showConfirmMenu
+                }
                 VoteManager.createTeamVote(player) { ok ->
                     if (ok) {
                         team.cores().forEach { core ->

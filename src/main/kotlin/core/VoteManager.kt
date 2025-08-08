@@ -18,6 +18,7 @@ object VoteManager{
     val globalVoteSession get() = globalVote
     val globalVoteCreator  get() = globalVote?.creator
     val globalVoteExcluded get() = globalVote?.excluded ?: emptySet()
+    fun getTeamVoteSession(team: Team) = teamVotes[team]
 
     fun clearVote(){
         globalVote = null
