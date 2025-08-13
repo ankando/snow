@@ -68,7 +68,7 @@ object InfinityWar {
         val block = build.block
         if (build.block is Turret) return
 
-        var changed = false // 标记是否有内容变化
+        var changed = false
 
         for (consumer in block.consumers) {
             when (consumer) {
