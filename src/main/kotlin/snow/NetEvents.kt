@@ -6,17 +6,15 @@ import arc.util.Strings
 import arc.util.Time
 import arc.util.io.Writes
 import mindustry.Vars
+import mindustry.Vars.netServer
 import mindustry.core.Version
 import mindustry.game.EventType
 import mindustry.game.Team
-import mindustry.gen.AdminRequestCallPacket
 import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.gen.Player
-import mindustry.net.Administration.TraceInfo
 import mindustry.net.NetConnection
 import mindustry.net.Packets
-import mindustry.net.Packets.AdminAction
 import mindustry.net.Packets.KickReason
 import plugin.core.*
 import plugin.core.PermissionManager.isBanned
@@ -75,11 +73,11 @@ object NetEvents {
                         "$text ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
                     else text
                     val msg = "$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}"
-                    players.forEach { it.sendMessage(msg) }
+                    players.forEach { it.sendMessage(netServer.chatFormatter.format(it,msg), it, msg) }
                 }
             },
             onError = {
-                Core.app.post { players.forEach { it.sendMessage(fallback) } }
+                Core.app.post { players.forEach { it.sendMessage(netServer.chatFormatter.format(it,fallback), it, fallback) } }
             }
         )
     }
@@ -106,7 +104,7 @@ object NetEvents {
         val s = if (d == 0f) 0f else d / (1f - kotlin.math.abs(2f * l - 1f))
 
         val baseSaturation = (s * 0.4f).coerceIn(0f, 0.35f)
-        val baseLightness  = (l * 0.6f + 0.35f).coerceIn(0.60f, 0.90f)
+        val baseLightness  = (l * 0.6f + 0.38f).coerceIn(0.60f, 0.90f)
 
         fun hslToRgb(hh: Float, ss: Float, ll: Float): Triple<Int, Int, Int> {
             val c = (1 - kotlin.math.abs(2 * ll - 1)) * ss
@@ -156,59 +154,9 @@ object NetEvents {
     }
 
 
-
-
-    private const val BAN_MS = 60 * 60_000L
-
     @JvmStatic
-    fun adminRequest(con: NetConnection?, pkt: AdminRequestCallPacket?) {
-        val admin = con?.player ?: return
-        val target = pkt?.other ?: return
-        if (!admin.admin || (target.admin && target !== admin)) return
-
-        Events.fire(EventType.AdminRequestEvent(admin, target, pkt.action))
-        val uuid = target.uuid()
-
-        fun restore() = RevertBuild.restorePlayerEditsWithinSeconds(uuid, 200)
-
-        when (pkt.action) {
-            AdminAction.kick -> {
-                restore()
-                UnitEffects.clear(uuid)
-                target.kick(KickReason.kick)
-            }
-
-            AdminAction.ban -> {
-                restore()
-                DataManager.getPlayerDataByUuid(uuid)?.apply {
-                    banUntil = Time.millis() + BAN_MS
-                    DataManager.requestSave()
-                }
-                UnitEffects.clear(uuid)
-                target.kick(KickReason.banned, BAN_MS)
-            }
-
-            AdminAction.trace -> Call.traceInfo(
-                con, target,
-                TraceInfo(
-                    "[hidden]",
-                    "[hidden]",
-                    target.locale,
-                    target.con.modclient,
-                    target.con.mobile,
-                    target.info.timesJoined,
-                    target.info.timesKicked,
-                    arrayOf("[hidden]"),
-                    target.info.names.toArray(String::class.java)
-                )
-            )
-
-            AdminAction.wave -> {
-                Vars.logic.skipWave()
-            }
-
-            AdminAction.switchTeam -> {}
-        }
+    fun adminRequest(con: NetConnection?, any: Any?) {
+     return
     }
 
     @JvmStatic
@@ -217,12 +165,19 @@ object NetEvents {
         Events.fire(EventType.ConnectionEvent(con))
 
         val ip = con.address
-        val admins = Vars.netServer.admins
+        val admins = netServer.admins
         if (admins.isIPBanned(ip) || admins.isSubnetBanned(ip)) {
             con.kick(KickReason.banned); return
         }
 
-        Vars.net.connections.filter { it.address == ip }.takeIf { it.size >= 5 }?.forEach(NetConnection::close)
+        Vars.net.connections
+            .filter { it.address == ip }
+            .takeIf { it.size >= 5 }
+            ?.let { conns ->
+                netServer.admins.blacklistDos(con.address)
+                conns.forEach { it.close() }
+            }
+
     }
 
     @JvmStatic
@@ -233,7 +188,7 @@ object NetEvents {
             reason?.let { con.kick(it, 0) } ?: con.kick(msg, 0)
         }
 
-        val admins = Vars.netServer.admins
+        val admins = netServer.admins
         val uuid = pkt.uuid ?: return
         val usid = pkt.usid ?: run { kick(reason = KickReason.idInUse); return }
         val ip = con.address
@@ -260,7 +215,7 @@ object NetEvents {
             kick(reason = KickReason.nameEmpty)
             return
         }
-        pkt.name = Vars.netServer.fixName(cleanName)
+        pkt.name = netServer.fixName(cleanName)
 
         val info = admins.getInfo(uuid)
 
@@ -355,15 +310,15 @@ object NetEvents {
                 val revoked = mutableListOf<String>()
 
                 for (u in pData.uuids) {
-                    val info = Vars.netServer.admins.getInfo(u)
+                    val info = netServer.admins.getInfo(u)
                     if (info != null && info.admin) {
-                        Vars.netServer.admins.unAdminPlayer(u)
+                        netServer.admins.unAdminPlayer(u)
                         revoked += u
                     }
                 }
 
                 if (revoked.isNotEmpty()) {
-                    Vars.netServer.admins.save()
+                    netServer.admins.save()
                     Call.infoMessage(player.con, "Your USID has changed. Admin privileges have been revoked.")
                 }
             }
@@ -383,8 +338,8 @@ object NetEvents {
             return
         }
 
-        player.team(Vars.netServer.assignTeam(player))
-        Vars.netServer.sendWorldData(player)
+        player.team(netServer.assignTeam(player))
+        netServer.sendWorldData(player)
         Core.app.post { Vars.platform.updateRPC() }
         Events.fire(EventType.PlayerConnect(player))
     }

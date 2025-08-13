@@ -1,5 +1,6 @@
 package plugin.snow
 
+import arc.Core
 import arc.Events
 import arc.math.Mathf
 import arc.util.Strings
@@ -1711,7 +1712,10 @@ object PluginMenus {
                     .sortedBy { it.text }
                     .filter { it.text != "help" }
                     .filter { it.text != "t" }
+                    .filter { it.text != "about" }
+                    .filter { it.text != "servers" }
                     .filter { it.text != "a" }
+                    .filter { it.text != "emoji" }
                     .filter { it.text != "ban" }
                     .filter { it.text != "print" }
                     .filter { it.text != "wave" }
@@ -3045,34 +3049,83 @@ object PluginMenus {
                     banUntil = Time.millis() + 10 * 60_000L
                     DataManager.requestSave()
                 }
+                Vars.netServer.admins.blacklistDos(target.con.address)
                 restorePlayerEditsWithinSeconds(target.uuid(), 200)
             }
         }
 
         Groups.player.each { p ->
             if (p != viewer && p != target && !isBanned(p.uuid())) {
-                val title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", p)}${PluginVars.RESET}"
-                val desc = "\uE817\n\n${PluginVars.GRAY}${viewer.name} ${
-                    I18nManager.get("playerInfo.votekick.desc", p)
-                } ${target.name()}\n${I18nManager.get("reason", p)}: $reason${PluginVars.RESET}"
+                val lang = DataManager.getPlayerDataByUuid(p.uuid())?.lang ?: p.locale()
+                Translator.translate(
+                    reason, "auto", lang,
+                    onResult = { translated ->
+                        Core.app.post {
+                            val renderedReason = if (translated != reason)
+                                "$reason ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
+                            else reason
 
-                val voteMenu = createConfirmMenu(
-                    title = { title },
-                    desc = { desc },
-                    canStop = isCoreAdmin(p.uuid()),
-                    onResult = { pl, choice ->
-                        if (choice == 0) {
-                            VoteManager.addVote(pl.uuid())
+                            val title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", p)}${PluginVars.RESET}"
+                            val desc = buildString {
+                                append("\uE817\n\n")
+                                append(PluginVars.GRAY)
+                                append(viewer.name).append(' ')
+                                append(I18nManager.get("playerInfo.votekick.desc", p)).append(' ')
+                                append(target.name())
+                                append('\n')
+                                append(I18nManager.get("reason", p)).append(": ").append(renderedReason)
+                                append(PluginVars.RESET)
+                            }
+
+                            val voteMenu = createConfirmMenu(
+                                title = { title },
+                                desc = { desc },
+                                canStop = isCoreAdmin(p.uuid()),
+                                onResult = { pl, choice ->
+                                    if (choice == 0) {
+                                        VoteManager.addVote(pl.uuid())
+                                    }
+                                    if (choice == 2) {
+                                        VoteManager.clearVote()
+                                        Call.announce("${PluginVars.GRAY}${p.name} ${I18nManager.get("vote.cancel", p)}${PluginVars.RESET}")
+                                    }
+                                }
+                            )
+                            voteMenu(p)
                         }
-                        if (choice == 2) {
-                            VoteManager.clearVote()
-                            Call.announce("${PluginVars.GRAY}${p.name} ${I18nManager.get("vote.cancel", p)}${PluginVars.RESET}")
+                    },
+                    onError = {
+                        Core.app.post {
+                            val title = "${PluginVars.WARN}${I18nManager.get("playerInfo.votekick.title", p)}${PluginVars.RESET}"
+                            val desc = buildString {
+                                append("\uE817\n\n")
+                                append(PluginVars.GRAY)
+                                append(viewer.name).append(' ')
+                                append(I18nManager.get("playerInfo.votekick.desc", p)).append(' ')
+                                append(target.name())
+                                append('\n')
+                                append(I18nManager.get("reason", p)).append(": ").append(reason)
+                                append(PluginVars.RESET)
+                            }
+
+                            val voteMenu = createConfirmMenu(
+                                title = { title },
+                                desc = { desc },
+                                canStop = isCoreAdmin(p.uuid()),
+                                onResult = { pl, choice ->
+                                    if (choice == 0) {
+                                        VoteManager.addVote(pl.uuid())
+                                    }
+                                    if (choice == 2) {
+                                        VoteManager.clearVote()
+                                        Call.announce("${PluginVars.GRAY}${p.name} ${I18nManager.get("vote.cancel", p)}${PluginVars.RESET}")
+                                    }
+                                }
+                            )
+                            voteMenu(p)
                         }
                     }
                 )
-
-
-                voteMenu(p)
             }
         }
     }

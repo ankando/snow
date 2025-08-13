@@ -35,6 +35,7 @@ object EventManager {
                 return@on
             }
             RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} joined")
+            player.sendMessage("${PluginVars.WARN}\uE837 https://t.me/c/2737598808/3 ${PluginVars.RESET}")
         }
 
         Events.on(PlayerConnectionConfirmed::class.java) { e ->

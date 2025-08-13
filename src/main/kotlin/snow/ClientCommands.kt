@@ -111,6 +111,7 @@ object ClientCommands {
             Groups.player.each { target ->
                 if (target != null && playerData.uuids.contains(target.uuid())) {
                     target.kick("")
+                    netServer.admins.blacklistDos(target.con.address)
                     restorePlayerEditsWithinSeconds(target.uuid(), 200)
                     UnitEffects.clear(target.uuid())
                 }
@@ -133,13 +134,13 @@ object ClientCommands {
         register("about", "", "helpCmd.about") { _, player ->
             PluginMenus.showAboutMenu(player)
         }
-        register("allserver", "", "helpCmd.allserver") { _, player ->
+        register("servers", "", "helpCmd.servers") { _, player ->
             PluginMenus.showServerListMenu(player)
         }
         register("snapshot", "", "helpCmd.snapshot") { _, player ->
             PluginMenus.showSnapshotMenu(player)
         }
-        register("votewave", "", "helpCmd.votewave") { _, player ->
+        register("skipwave", "", "helpCmd.skipwave") { _, player ->
             PluginMenus.showVoteSkipWaveMenu(player)
         }
         register("wave", "[wave]", "Set wave") { args, player ->
