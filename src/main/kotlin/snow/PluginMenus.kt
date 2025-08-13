@@ -1934,7 +1934,9 @@ object PluginMenus {
                 return@MenuEntry
             }
             showConfirmMenu(viewer) {
-                target.kick(Packets.KickReason.kick)
+                target.kick(Packets.KickReason.kick, 5 * 60_000L)
+                Vars.netServer.admins.blacklistDos(target.con.address)
+                restorePlayerEditsWithinSeconds(target.uuid(), 200)
                 Call.announce(
                     "${PluginVars.GRAY}${viewer.name} ${I18nManager.get("playerInfo.kick.success", viewer)} ${target.name}${PluginVars.RESET}"
                 )
@@ -2991,6 +2993,8 @@ object PluginMenus {
                 showConfirmMenu(player) {
                     if (isCoreAdmin(player.uuid())) {
                         Call.kick(target.con, Packets.KickReason.kick)
+                        Vars.netServer.admins.blacklistDos(target.con.address)
+                        restorePlayerEditsWithinSeconds(target.uuid(), 200)
                         Call.announce(
                             "@${target.name} ${PluginVars.WARN}${I18nManager.get("votekick.kicked.byadmin", player)}${PluginVars.RESET}"
                         )
@@ -3044,6 +3048,7 @@ object PluginMenus {
             excludePlayers = exclude
         ) { ok ->
             if (ok) {
+                Call.announce("${PluginVars.WARN}${viewer.name} ${I18nManager.get("playerInfo.kick.success", viewer)} ${PluginVars.RESET}")
                 target.kick(reason, 5 * 60_000L)
                 DataManager.getPlayerDataByUuid(target.uuid())?.apply {
                     banUntil = Time.millis() + 10 * 60_000L

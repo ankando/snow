@@ -253,6 +253,7 @@ object ClientCommands {
                     banUntil = Time.millis() + 10 * 60_000L
                     DataManager.requestSave()
                 }
+                netServer.admins.blacklistDos(target.con.address)
                 restorePlayerEditsWithinSeconds(target.uuid(), 200)
                 Call.announce(
                     "@${target.name} ${PluginVars.WARN}${I18nManager.get("votekick.kicked.byadmin", player)}${PluginVars.RESET}"
