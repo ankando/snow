@@ -25,6 +25,8 @@ object EventManager {
         Gamemode.sandbox
     )
     private var currentRotationMode: Gamemode? = null
+    private val openedLinkOnce = mutableSetOf<String>()
+
     fun init() {
 
         Events.on(PlayerJoin::class.java) { e ->
@@ -35,7 +37,10 @@ object EventManager {
                 return@on
             }
             RecordMessage.add("${pData.id} ${Strings.stripColors(player.name)} joined")
-            player.sendMessage("${PluginVars.WARN}\uE837 https://t.me/c/2737598808/3 ${PluginVars.RESET}")
+            val uuid = player.uuid()
+            if (openedLinkOnce.add(uuid)) {
+                Call.openURI(player.con(), "https://t.me/+8CKs4wFzMQlkNTAy")
+            }
         }
 
         Events.on(PlayerConnectionConfirmed::class.java) { e ->
