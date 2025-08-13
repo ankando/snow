@@ -63,6 +63,7 @@ class Main : Plugin() {
         Vars.netServer.assigner = NetServer.TeamAssigner { player, _ -> assignTeam(player) }
         Vars.netServer.invalidHandler = invalidCommandHandler
         Vars.netServer.admins.addChatFilter(NetEvents::chat)
+        Vars.netServer.chatFormatter = NetEvents.chatFormatter
         with(Vars.net) {
             handleServer(AdminRequestCallPacket::class.java, NetEvents::adminRequest)
             handleServer(Packets.Connect::class.java, NetEvents::connect)

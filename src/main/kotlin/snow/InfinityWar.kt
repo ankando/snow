@@ -5,6 +5,7 @@ import mindustry.Vars
 import mindustry.content.Blocks
 import mindustry.content.Items
 import mindustry.gen.Building
+import mindustry.gen.Call
 import mindustry.gen.Groups
 import mindustry.world.blocks.defense.turrets.Turret
 import mindustry.world.consumers.*
@@ -28,7 +29,6 @@ object InfinityWar {
     @Synchronized
     fun updateBuilding() {
         if (!enabled) return
-
         consumeBuildings.removeIf { ref -> ref.get() == null || !ref.get()?.isAdded!! }
 
         Groups.build.each { build ->
@@ -67,42 +67,39 @@ object InfinityWar {
     private fun processBuild(build: Building) {
         val block = build.block
         if (build.block is Turret) return
+
+        var changed = false // 标记是否有内容变化
+
         for (consumer in block.consumers) {
             when (consumer) {
                 is ConsumeItems -> {
                     if (block == Blocks.thoriumReactor) {
-                        Core.app.post {
-                            build.items.add(
-                                Items.thorium,
-                                30 - build.items.get(Items.thorium)
-                            )
+                        if (build.items.get(Items.thorium) < 30) {
+                            build.items.add(Items.thorium, 30 - build.items.get(Items.thorium))
+                            changed = true
                         }
                         continue
                     }
-
                     for (stack in consumer.items) {
                         if (build.items.get(stack.item) < 2000) {
-                            Core.app.post {
-                                build.items.add(stack.item, 2000)
-                            }
+                            build.items.add(stack.item, 2000)
+                            changed = true
                         }
                     }
                 }
 
                 is ConsumeLiquid -> {
                     if (build.liquids.get(consumer.liquid) < 2000) {
-                        Core.app.post {
-                            build.liquids.add(consumer.liquid, 2000f)
-                        }
+                        build.liquids.add(consumer.liquid, 2000f)
+                        changed = true
                     }
                 }
 
                 is ConsumeLiquids -> {
                     for (stack in consumer.liquids) {
                         if (build.liquids.get(stack.liquid) < 2000) {
-                            Core.app.post {
-                                build.liquids.add(stack.liquid, 2000f)
-                            }
+                            build.liquids.add(stack.liquid, 2000f)
+                            changed = true
                         }
                     }
                 }
@@ -110,9 +107,8 @@ object InfinityWar {
                 is ConsumeItemFilter -> {
                     for (item in Vars.content.items().select(consumer.filter)) {
                         if (build.items.get(item) < 2000) {
-                            Core.app.post {
-                                build.items.add(item, 2000)
-                            }
+                            build.items.add(item, 2000)
+                            changed = true
                         }
                     }
                 }
@@ -120,13 +116,38 @@ object InfinityWar {
                 is ConsumeLiquidFilter -> {
                     for (liquid in Vars.content.liquids().select(consumer.filter)) {
                         if (build.liquids.get(liquid) < 2000) {
-                            Core.app.post {
-                                build.liquids.add(liquid, 2000f)
-                            }
+                            build.liquids.add(liquid, 2000f)
+                            changed = true
                         }
                     }
                 }
             }
         }
+
+        if (changed) {
+            try {
+                val syncStreamField = Vars.netServer::class.java.getDeclaredField("syncStream").apply { isAccessible = true }
+                val dataStreamField = Vars.netServer::class.java.getDeclaredField("dataStream").apply { isAccessible = true }
+                val syncStream = syncStreamField.get(Vars.netServer) as arc.util.io.ReusableByteOutStream
+                val dataStream = dataStreamField.get(Vars.netServer) as java.io.DataOutputStream
+
+                Core.app.post {
+                    try {
+                        syncStream.reset()
+                        dataStream.writeInt(build.pos())
+                        dataStream.writeShort(build.block.id.toInt())
+                        build.writeAll(arc.util.io.Writes.get(dataStream))
+                        dataStream.flush()
+                        Call.blockSnapshot(1.toShort(), syncStream.toByteArray())
+                        syncStream.reset()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
+
 }

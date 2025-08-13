@@ -7,6 +7,7 @@ import arc.util.Time
 import arc.util.io.Writes
 import mindustry.Vars
 import mindustry.Vars.netServer
+import mindustry.core.NetServer
 import mindustry.core.Version
 import mindustry.game.EventType
 import mindustry.game.Team
@@ -23,6 +24,14 @@ import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 
 object NetEvents {
+    val chatFormatter = NetServer.ChatFormatter { player, message ->
+        if (player == null) {
+            message
+        } else {
+            val prefix = buildChatPrefix(player)
+            "$prefix: ${PluginVars.GRAY}$message${PluginVars.RESET}"
+        }
+    }
 
     @JvmStatic
     fun chat(p: Player?, msg: String?): String? {
@@ -46,24 +55,22 @@ object NetEvents {
         val plain = Strings.stripColors(raw).trim()
         if (plain.isBlank() || ctrlCharRegex.containsMatchIn(plain)) return
 
-        val prefix = buildChatPrefix(sender)
-        val localMsg = "$prefix: ${PluginVars.GRAY}$plain${PluginVars.RESET}"
-        sender.sendMessage(localMsg)
-        RecordMessage.add(localMsg)
+        sender.sendMessage(netServer.chatFormatter.format(sender, plain), sender, plain)
+        RecordMessage.add(plain)
         val rawLangGroups = groupPlayersByLang(sender)
 
         rawLangGroups.forEach { (lang, players) ->
-            sendTranslatedBroadcast(plain, prefix, lang, players, fallback = localMsg)
+            sendTranslatedBroadcast(plain, lang, players, fallback = plain, sender)
         }
     }
 
 
     private fun sendTranslatedBroadcast(
         text: String,
-        prefix: String,
         lang: String,
         players: List<Player>,
-        fallback: String
+        fallback: String,
+        sender: Player
     ) {
         Translator.translate(
             text, "auto", lang,
@@ -72,12 +79,11 @@ object NetEvents {
                     val body = if (translated != text)
                         "$text ${PluginVars.SECONDARY}($translated)${PluginVars.RESET}"
                     else text
-                    val msg = "$prefix: ${PluginVars.GRAY}$body${PluginVars.RESET}"
-                    players.forEach { it.sendMessage(netServer.chatFormatter.format(it,msg), it, msg) }
+                    players.forEach { it.sendMessage(netServer.chatFormatter.format(sender, body), sender, body) }
                 }
             },
             onError = {
-                Core.app.post { players.forEach { it.sendMessage(netServer.chatFormatter.format(it,fallback), it, fallback) } }
+                Core.app.post { players.forEach { it.sendMessage(netServer.chatFormatter.format(sender,fallback), sender, fallback) } }
             }
         )
     }
